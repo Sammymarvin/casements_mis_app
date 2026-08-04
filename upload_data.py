@@ -21,8 +21,8 @@ def seed_master_configurations():
     team_members = [
         ("Sandra", "Sales Executive"),
         ("Doreen", "Sales Executive"),
-        ("General Manager", "General Manager"),
-        ("Anna", "General Manager")
+        ("General Manager", "Sales Executive"),
+        ("Anna", "Sales Executive")
     ]
     for name, role in team_members:
         cursor.execute("""
