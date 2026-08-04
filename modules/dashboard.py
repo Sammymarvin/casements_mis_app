@@ -5,23 +5,28 @@ from database.db import run_query
 def render_dashboard():
     st.header("📈 Executive Management Dashboard")
     
-    # Fetch available months dynamically from opportunities
+    # ----------------------------------------------------
+    # DYNAMIC MONTH SELECTION
+    # ----------------------------------------------------
     months_query = """
         SELECT DISTINCT strftime('%Y-%m', date_entered) as month_val 
         FROM opportunities 
-        WHERE date_entered IS NOT NULL
+        WHERE date_entered IS NOT NULL AND date_entered != ''
         ORDER BY month_val DESC;
     """
-    df_months = run_query(months_query)
-    
-    available_months = df_months["month_val"].dropna().tolist()
+    try:
+        df_months = run_query(months_query)
+        available_months = df_months["month_val"].dropna().tolist() if not df_months.empty else []
+    except Exception:
+        available_months = []
+
     month_options = ["All Time"] + available_months
     
     # Month Filter Control
     selected_month = st.selectbox("📅 Filter Performance by Month", month_options, index=0)
     
     # ----------------------------------------------------
-    # 1. SUMMARY METRICS QUERY
+    # 1. EXECUTIVE SUMMARY METRICS QUERY
     # ----------------------------------------------------
     where_clause = ""
     metrics_params = []
@@ -40,10 +45,13 @@ def render_dashboard():
         FROM opportunities
         {where_clause};
     """
-    df_metrics = run_query(metrics_query, metrics_params) if metrics_params else run_query(metrics_query)
-    row = df_metrics.iloc[0]
     
-    # Metrics Layout
+    df_metrics = run_query(metrics_query, metrics_params) if metrics_params else run_query(metrics_query)
+    row = df_metrics.iloc[0] if not df_metrics.empty else {
+        "total_deals": 0, "total_quoted": 0, "total_revenue_won": 0, "total_outstanding": 0
+    }
+    
+    # Metrics Layout Display
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total Deals Logged", int(row["total_deals"]))
     col2.metric("Total Quoted (UGX)", f"{row['total_quoted']:,.0f}")
@@ -57,6 +65,8 @@ def render_dashboard():
     # ----------------------------------------------------
     st.subheader(f"🏆 Sales Executive Leaderboard ({selected_month})")
     
+    # UPDATED: Filters by both 'Sales Executive' and 'General Manager' roles 
+    # so all team roster members show up even with 0 deals logged
     leaderboard_query = """
         SELECT 
             u.full_name as 'Sales Executive',
@@ -67,9 +77,10 @@ def render_dashboard():
         FROM users u
         LEFT JOIN opportunities o ON u.user_id = o.sales_executive_id 
             AND (? IS NULL OR strftime('%Y-%m', o.date_entered) = ?)
-        WHERE u.role = 'Sales Executive'
+        WHERE u.role IN ('Sales Executive', 'General Manager')
         GROUP BY u.user_id, u.full_name
-        ORDER BY COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) DESC;
+        ORDER BY COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) DESC,
+                 COUNT(o.opportunity_id) DESC;
     """
     
     leaderboard_params = [selected_month, selected_month] if selected_month != "All Time" else [None, None]
