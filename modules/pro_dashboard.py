@@ -41,7 +41,8 @@ def render_pro_dashboard():
             "🏆 Overall Scorecard & Executive View",
             "📱 Digital Marketing & Reach",
             "💰 Lead Source & Revenue Attribution",
-            "📝 Input & Update PRO Metrics"
+            "📝 Input & Update PRO Metrics",
+            "📜 Historical Logs & Performance Audit"
         ]
     )
 
@@ -56,7 +57,7 @@ def render_pro_dashboard():
     except Exception:
         df_opps = pd.DataFrame()
 
-    # Fetch PRO Log Data
+    # Fetch Latest PRO Log Data
     try:
         df_pro_logs = run_query("SELECT * FROM pro_kpi_logs ORDER BY log_id DESC LIMIT 1")
     except Exception:
@@ -233,8 +234,8 @@ def render_pro_dashboard():
                     st.success(f"Successfully recorded lead for '{client_name}' via {lead_source}!")
                     st.rerun()
 
-                    # ==========================================
-    # VIEW 4: INPUT & UPDATE PRO METRICS (ENTRY FORM)
+    # ==========================================
+    # VIEW 4: INPUT & UPDATE PRO METRICS
     # ==========================================
     elif pro_menu == "📝 Input & Update PRO Metrics":
         st.markdown("### 📝 Enter PRO Monthly Analytics & Performance Data")
@@ -307,3 +308,43 @@ def render_pro_dashboard():
                 ))
                 st.success(f"PRO Performance metrics for {log_month} saved successfully!")
                 st.rerun()
+
+    # ==========================================
+    # VIEW 5: HISTORICAL LOGS & PERFORMANCE AUDIT
+    # ==========================================
+    elif pro_menu == "📜 Historical Logs & Performance Audit":
+        st.markdown("### 📜 Historical PRO KPI Logs & Trends")
+        st.caption("Review past monthly entries, perform audits, and track long-term growth across all channels.")
+
+        try:
+            df_all_logs = run_query("SELECT * FROM pro_kpi_logs ORDER BY log_id DESC")
+        except Exception:
+            df_all_logs = pd.DataFrame()
+
+        if not df_all_logs.empty:
+            st.dataframe(df_all_logs, use_container_width=True)
+
+            st.divider()
+            st.markdown("#### 📈 Multi-Month Channel Reach Trends")
+            
+            # Simple Trend Chart Selection
+            if 'log_month' in df_all_logs.columns:
+                df_chart = df_all_logs.sort_values(by='log_id', ascending=True)
+                metric_to_chart = st.selectbox(
+                    "Select Metric to Visualize Trend",
+                    ["tiktok_views", "facebook_engagement", "x_impressions", "website_visitors", "whatsapp_enquiries", "csat_rating"]
+                )
+                st.line_chart(df_chart.set_index('log_month')[metric_to_chart])
+
+            st.divider()
+
+            # Export Capability
+            csv_data = df_all_logs.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Export All PRO KPI Logs (CSV)",
+                data=csv_data,
+                file_name="pro_kpi_logs_export.csv",
+                mime="text/csv"
+            )
+        else:
+            st.info("No historical logs found in database.")

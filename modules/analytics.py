@@ -64,6 +64,23 @@ def render_analytics():
         subtitle="Business Turnaround Strategy Dashboard | Sales & Marketing Analytics"
     )
 
+    # ----------------------------------------------------
+    # MONTH FILTER CONTROL
+    # ----------------------------------------------------
+    months_query = """
+        SELECT DISTINCT strftime('%Y-%m', date_entered) as month_val 
+        FROM opportunities 
+        WHERE date_entered IS NOT NULL
+        ORDER BY month_val DESC;
+    """
+    df_months = run_query(months_query)
+    available_months = df_months["month_val"].dropna().tolist() if not df_months.empty else []
+    month_options = ["All Time"] + available_months
+    
+    col_filter, col_empty = st.columns([1, 2])
+    with col_filter:
+        selected_month = st.selectbox("📅 Filter Performance by Month", month_options, index=0)
+
     # Sidebar View Selector
     menu = st.sidebar.radio(
         "Analytics Views", 
@@ -77,8 +94,15 @@ def render_analytics():
         ]
     )
 
+    # SQL WHERE Clause for Opportunities
+    where_opps = ""
+    params_opps = []
+    if selected_month != "All Time":
+        where_opps = "WHERE strftime('%Y-%m', o.date_entered) = ?"
+        params_opps = [selected_month]
+
     # Query Base Opportunities Data
-    query_opps = """
+    query_opps = f"""
         SELECT 
             o.opportunity_id,
             o.record_code AS [Code],
@@ -95,11 +119,12 @@ def render_analytics():
         FROM opportunities o
         LEFT JOIN users u ON o.sales_executive_id = u.user_id
         LEFT JOIN clients c ON o.client_id = c.client_id
+        {where_opps}
     """
-    df = run_query(query_opps)
+    df = run_query(query_opps, params_opps) if params_opps else run_query(query_opps)
 
     if df.empty:
-        st.info("No sales records available to generate performance analytics. Create records in the Master Entry module.")
+        st.info(f"No sales records available for '{selected_month}'.")
         return
 
     # Clean numerical values
@@ -119,7 +144,7 @@ def render_analytics():
     # VIEW 1: EXECUTIVE TRAFFIC LIGHT PANEL
     # ==========================================
     if menu == "🚦 Executive Traffic Light Panel":
-        st.markdown("### 🚥 Management Traffic Light Report")
+        st.markdown(f"### 🚥 Management Traffic Light Report ({selected_month})")
         st.caption("Strategic alignment monitoring based on executive target thresholds.")
 
         target_revenue = 1000000000.0  # UGX 1 Billion Monthly Target
@@ -161,7 +186,7 @@ def render_analytics():
     # VIEW 2: CORPORATE KPI SCORECARD
     # ==========================================
     elif menu == "🎯 Corporate KPI Scorecard":
-        st.markdown("### 🎯 Departmental KPI Scorecard")
+        st.markdown(f"### 🎯 Departmental KPI Scorecard ({selected_month})")
         st.caption("Sales & Marketing Target vs. Actual Variance Analysis")
 
         scorecard_df = pd.DataFrame([
@@ -182,7 +207,8 @@ def render_analytics():
                 "Variance": "{:,.1f}",
                 "Achievement %": "{:.1f}%"
             }),
-            use_container_width=True
+            use_container_width=True,
+            hide_index=True
         )
 
         st.divider()
@@ -193,11 +219,16 @@ def render_analytics():
     # VIEW 3: DAILY SALES ACTIVITY DASHBOARD
     # ==========================================
     elif menu == "📆 Daily Sales Activity Dashboard":
-        st.markdown("### 📆 Individual & Team Daily Sales Activity Dashboard")
+        st.markdown(f"### 📆 Individual & Team Daily Sales Activity Dashboard ({selected_month})")
         st.caption("Tracking field execution, telephone calls, meetings, and lead generation.")
 
-        # Updated query matching daily_activity_logs table schema
-        query_logs = """
+        where_logs = ""
+        params_logs = []
+        if selected_month != "All Time":
+            where_logs = "WHERE strftime('%Y-%m', dal.log_date) = ?"
+            params_logs = [selected_month]
+
+        query_logs = f"""
             SELECT 
                 dal.log_date AS [Date],
                 u.full_name AS [Sales Exec],
@@ -211,17 +242,17 @@ def render_analytics():
                 dal.remarks AS [Remarks]
             FROM daily_activity_logs dal
             LEFT JOIN users u ON dal.sales_executive_id = u.user_id
+            {where_logs}
             ORDER BY dal.log_date DESC
         """
         try:
-            df_logs = run_query(query_logs)
+            df_logs = run_query(query_logs, params_logs) if params_logs else run_query(query_logs)
         except Exception:
             df_logs = pd.DataFrame()
 
         if df_logs.empty:
-            st.info("No daily activity log records found in 'daily_activity_logs'.")
+            st.info(f"No daily activity log records found for '{selected_month}'.")
         else:
-            # Aggregate Daily Summary Cards
             c_a, c_b, c_c, c_d = st.columns(4)
             with c_a:
                 render_metric_card("Telephone Calls", f"{df_logs['Calls Made'].sum():,.0f}", "Target: 20 / Exec / Day", "#2563EB", "📞")
@@ -243,24 +274,24 @@ def render_analytics():
                 'New Leads': 'sum'
             }).reset_index()
 
-            st.dataframe(exec_logs, use_container_width=True)
+            st.dataframe(exec_logs, use_container_width=True, hide_index=True)
 
             st.divider()
             st.markdown("#### 📊 Activity Comparison across Team")
             st.bar_chart(exec_logs.set_index('Sales Exec')[['Calls Made', 'Companies Visited', 'Meetings Held', 'New Leads']])
 
-            # Challenges & Support Feedback
             with st.expander("💬 View Daily Field Challenges & Management Support Notes"):
                 st.dataframe(
                     df_logs[['Date', 'Sales Exec', 'Challenges', 'Mgmt Support', 'Remarks']], 
-                    use_container_width=True
+                    use_container_width=True,
+                    hide_index=True
                 )
 
     # ==========================================
     # VIEW 4: SALES EXECUTIVE LEADERBOARD
     # ==========================================
     elif menu == "🏆 Sales Executive Leaderboard":
-        st.markdown("### 🏆 Executive Sales Performance Dashboard")
+        st.markdown(f"### 🏆 Executive Sales Performance Dashboard ({selected_month})")
 
         exec_summary = df.groupby('Sales Exec').agg(
             Quotations=('opportunity_id', 'count'),
@@ -282,7 +313,8 @@ def render_analytics():
                 "Conversion Rate (%)": "{:.1f}%",
                 "Collection Rate (%)": "{:.1f}%"
             }),
-            use_container_width=True
+            use_container_width=True,
+            hide_index=True
         )
 
         st.divider()
@@ -293,7 +325,7 @@ def render_analytics():
     # VIEW 5: SALES FUNNEL & PIPELINE
     # ==========================================
     elif menu == "📉 Sales Funnel & Pipeline":
-        st.markdown("### 📉 Monthly Sales Funnel & Deal Pipeline")
+        st.markdown(f"### 📉 Monthly Sales Funnel & Deal Pipeline ({selected_month})")
 
         stage_summary = df.groupby('Status').agg(
             Deal_Count=('opportunity_id', 'count'),
@@ -308,7 +340,7 @@ def render_analytics():
 
         with col_f2:
             st.markdown("#### Stage Count Distribution")
-            st.dataframe(stage_summary, use_container_width=True)
+            st.dataframe(stage_summary, use_container_width=True, hide_index=True)
 
         st.divider()
         st.markdown("#### ❌ Lost Deal Reason Analysis")
@@ -317,13 +349,13 @@ def render_analytics():
             loss_counts = lost_df['Reason for Loss'].value_counts()
             st.bar_chart(loss_counts)
         else:
-            st.info("No lost deal reasons recorded in system.")
+            st.info("No lost deal reasons recorded for this selection.")
 
     # ==========================================
     # VIEW 6: MARKET SEGMENT & PRODUCT SCOPE
     # ==========================================
     elif menu == "🏢 Market Segment & Product Scope":
-        st.markdown("### 🏗️ Market Segment & Product Breakdown")
+        st.markdown(f"### 🏗️ Market Segment & Product Breakdown ({selected_month})")
 
         m1, m2 = st.columns(2)
 
