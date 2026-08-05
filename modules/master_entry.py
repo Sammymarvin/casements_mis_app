@@ -22,9 +22,14 @@ def render_master_entry():
         "🔄 View & Update Records"
     ])
     
-    # Load Database Master Lists
-    sales_execs_df = run_query("SELECT user_id, full_name FROM users WHERE role = 'Sales Executive' AND is_active = 1")
-    sales_execs = sales_execs_df['full_name'].tolist() if not sales_execs_df.empty else ["Sandra", "Anna", "Doreen"]
+    # --- UPDATED: Load ALL active team members regardless of specific role title ---
+    sales_execs_df = run_query("""
+        SELECT user_id, full_name 
+        FROM users 
+        WHERE is_active = 1 AND role IN ('Sales Executive', 'General Manager', 'Admin')
+        ORDER BY full_name ASC
+    """)
+    sales_execs = sales_execs_df['full_name'].tolist() if not sales_execs_df.empty else ["Sandra", "Anna", "Doreen", "General Manager"]
 
     project_types = get_setting_options("project_type")
     products_scope = get_setting_options("scope_of_work")
@@ -178,7 +183,6 @@ def render_master_entry():
                         client_id = int(run_query("SELECT client_id FROM clients WHERE company_name = ?", (client_name.strip(),)).iloc[0]['client_id'])
                     else:
                         client_id = int(existing_client.iloc[0]['client_id'])
-                        # Update phone if it was updated
                         if contact_number.strip():
                             execute_commit("UPDATE clients SET phone = ? WHERE client_id = ?", (contact_number.strip(), client_id))
                     
@@ -216,7 +220,7 @@ def render_master_entry():
             with col_f2:
                 status_filter = st.selectbox("Filter by Deal Status", ["All"] + deal_statuses)
             with col_f3:
-                st.write("") # Padding spacing
+                st.write("") 
                 st.write("") 
                 filtered_csv = df_opps.to_csv(index=False).encode('utf-8')
                 st.download_button(
@@ -261,7 +265,6 @@ def render_master_entry():
                 selected_id = record_options[selected_label]
                 current_rec = filtered_df[filtered_df['opportunity_id'] == selected_id].iloc[0]
 
-                # Fetch Client ID and details for updating client contact info
                 client_id_res = run_query("SELECT client_id FROM opportunities WHERE opportunity_id = ?", (selected_id,))
                 current_client_id = int(client_id_res.iloc[0]['client_id']) if not client_id_res.empty else None
 
@@ -272,10 +275,17 @@ def render_master_entry():
                         upd_client_name = st.text_input("Client / Company Name", value=str(current_rec['Client Name']))
                         upd_contact_num = st.text_input("Contact Number", value=str(current_rec['Contact Number'] or ''))
                         
+                        # --- SAFE FALLBACK INDEXING FOR MOBILE/DESKTOP ---
+                        current_exec_name = str(current_rec['Sales Exec'])
+                        if current_exec_name not in sales_execs and current_exec_name and current_exec_name != 'None':
+                            sales_execs.append(current_exec_name)
+
+                        exec_index = sales_execs.index(current_exec_name) if current_exec_name in sales_execs else 0
+
                         upd_sales_exec = st.selectbox(
                             "Assigned Sales Executive",
                             options=sales_execs,
-                            index=sales_execs.index(current_rec['Sales Exec']) if current_rec['Sales Exec'] in sales_execs else 0
+                            index=exec_index
                         )
                         
                         upd_deal_status = st.selectbox(
@@ -324,10 +334,9 @@ def render_master_entry():
                         upd_balance = upd_quotation_amt - upd_amount_paid
                         st.metric("Updated Outstanding Balance", f"UGX {upd_balance:,.0f}")
                         
-                        # Handle Date parsing for follow-up date
                         try:
                             parsed_date = datetime.datetime.strptime(str(current_rec['Next Follow-Up']), "%Y-%m-%d").date()
-                        except ValueError:
+                        except (ValueError, TypeError):
                             parsed_date = datetime.date.today()
 
                         upd_followup = st.date_input("Next Follow-Up Date", value=parsed_date)
