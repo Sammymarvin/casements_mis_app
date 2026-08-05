@@ -22,7 +22,7 @@ def render_master_entry():
         "🔄 View & Update Records"
     ])
     
-    # --- UPDATED: Load ALL active team members regardless of specific role title ---
+    # Load ALL active team members regardless of specific role title
     sales_execs_df = run_query("""
         SELECT user_id, full_name 
         FROM users 
