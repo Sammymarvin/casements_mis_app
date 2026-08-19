@@ -121,7 +121,7 @@ def init_db():
     );
     """)
 
-    # 4. Opportunities Master Table
+    # 4. Opportunities Master Table (With UNIQUE Composite Constraint to Prevent Duplicates)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS opportunities (
         opportunity_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,11 +141,12 @@ def init_db():
         next_followup_date DATE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (sales_executive_id) REFERENCES users(user_id),
-        FOREIGN KEY (client_id) REFERENCES clients(client_id)
+        FOREIGN KEY (client_id) REFERENCES clients(client_id),
+        UNIQUE(sales_executive_id, client_id, date_entered, scope_of_work)
     );
     """)
 
-    # 5. Daily Activity Logs Table
+    # 5. Daily Activity Logs Table (With UNIQUE Constraint on Log Date per Sales Executive)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS daily_activity_logs (
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -160,9 +161,11 @@ def init_db():
         management_support_needed TEXT,
         remarks TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (sales_executive_id) REFERENCES users(user_id)
+        FOREIGN KEY (sales_executive_id) REFERENCES users(user_id),
+        UNIQUE(log_date, sales_executive_id)
     );
     """)
+
     # 6. Competitor Pricing Intelligence Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS competitor_intelligence (
@@ -190,45 +193,46 @@ def init_db():
         FOREIGN KEY (client_id) REFERENCES clients(client_id)
     );
     """)
+
     # 8. PRO Monthly KPI Tracking Table
-  
     cursor.execute("""
-CREATE TABLE IF NOT EXISTS pro_kpi_logs (
-    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    log_month TEXT NOT NULL,
-    pr_campaigns INTEGER DEFAULT 0,
-    press_releases INTEGER DEFAULT 0,
-    project_showcases INTEGER DEFAULT 0,
-    testimonials_obtained INTEGER DEFAULT 0,
-    brand_compliance_pct REAL DEFAULT 100.0,
-    reputation_issues_resolved_pct REAL DEFAULT 100.0,
-    tiktok_posts INTEGER DEFAULT 0,
-    tiktok_views INTEGER DEFAULT 0,
-    facebook_posts INTEGER DEFAULT 0,
-    facebook_engagement INTEGER DEFAULT 0,
-    instagram_posts INTEGER DEFAULT 0,
-    instagram_follower_growth INTEGER DEFAULT 0,
-    linkedin_posts INTEGER DEFAULT 0,
-    x_posts INTEGER DEFAULT 0,
-    x_impressions INTEGER DEFAULT 0,
-    x_engagement_rate REAL DEFAULT 0.0,
-    x_followers_growth INTEGER DEFAULT 0,
-    website_updates INTEGER DEFAULT 0,
-    website_visitors INTEGER DEFAULT 0,
-    whatsapp_enquiries INTEGER DEFAULT 0,
-    csat_rating REAL DEFAULT 95.0,
-    complaints_resolved_pct REAL DEFAULT 100.0,
-    recorded_date DATE DEFAULT CURRENT_DATE
-);
-""")
+    CREATE TABLE IF NOT EXISTS pro_kpi_logs (
+        log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        log_month TEXT NOT NULL,
+        pr_campaigns INTEGER DEFAULT 0,
+        press_releases INTEGER DEFAULT 0,
+        project_showcases INTEGER DEFAULT 0,
+        testimonials_obtained INTEGER DEFAULT 0,
+        brand_compliance_pct REAL DEFAULT 100.0,
+        reputation_issues_resolved_pct REAL DEFAULT 100.0,
+        tiktok_posts INTEGER DEFAULT 0,
+        tiktok_views INTEGER DEFAULT 0,
+        facebook_posts INTEGER DEFAULT 0,
+        facebook_engagement INTEGER DEFAULT 0,
+        instagram_posts INTEGER DEFAULT 0,
+        instagram_follower_growth INTEGER DEFAULT 0,
+        linkedin_posts INTEGER DEFAULT 0,
+        x_posts INTEGER DEFAULT 0,
+        x_impressions INTEGER DEFAULT 0,
+        x_engagement_rate REAL DEFAULT 0.0,
+        x_followers_growth INTEGER DEFAULT 0,
+        website_updates INTEGER DEFAULT 0,
+        website_visitors INTEGER DEFAULT 0,
+        whatsapp_enquiries INTEGER DEFAULT 0,
+        csat_rating REAL DEFAULT 95.0,
+        complaints_resolved_pct REAL DEFAULT 100.0,
+        recorded_date DATE DEFAULT CURRENT_DATE
+    );
+    """)
 
     conn.commit()
     conn.close()
 
     # Automatically populate master options and team roster
     seed_master_configurations()
+
 def import_daily_activities_excel(file_path):
-    """Imports daily activity entries from an uploaded Excel file."""
+    """Imports daily activity entries from an uploaded Excel file using UPSERT logic."""
     df = pd.read_excel(file_path)
     
     # Clean column names by stripping trailing/leading whitespace
@@ -268,20 +272,29 @@ def import_daily_activities_excel(file_path):
         remarks = str(row.get('Remarks', '')).replace('nan', '').strip()
 
         # 1. Get or Create User ID for the Sales Person
-        user_res = run_query("SELECT user_id FROM users WHERE full_name = ?", (sales_person,))
+        user_res = run_query("SELECT user_id FROM users WHERE LOWER(full_name) = LOWER(?)", (sales_person,))
         if user_res.empty:
             execute_commit("INSERT INTO users (full_name, role) VALUES (?, 'Sales Executive')", (sales_person,))
-            user_id = int(run_query("SELECT user_id FROM users WHERE full_name = ?", (sales_person,)).iloc[0]['user_id'])
+            user_id = int(run_query("SELECT user_id FROM users WHERE LOWER(full_name) = LOWER(?)", (sales_person,)).iloc[0]['user_id'])
         else:
             user_id = int(user_res.iloc[0]['user_id'])
 
-        # 2. Insert record into daily_activity_logs
+        # 2. Insert or Update record in daily_activity_logs using UPSERT
         query = """
             INSERT INTO daily_activity_logs 
             (log_date, sales_executive_id, new_companies_visited, telephone_calls, 
              emails_sent, meetings_held, new_leads_generated, daily_challenges, 
              management_support_needed, remarks)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(log_date, sales_executive_id) DO UPDATE SET
+                new_companies_visited = excluded.new_companies_visited,
+                telephone_calls = excluded.telephone_calls,
+                emails_sent = excluded.emails_sent,
+                meetings_held = excluded.meetings_held,
+                new_leads_generated = excluded.new_leads_generated,
+                daily_challenges = excluded.daily_challenges,
+                management_support_needed = excluded.management_support_needed,
+                remarks = excluded.remarks;
         """
         params = (
             log_date, user_id, new_companies_visited, telephone_calls,
