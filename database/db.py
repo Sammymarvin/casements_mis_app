@@ -29,17 +29,17 @@ def run_query(query, params=None):
     Permanent helper to execute SELECT queries against PostgreSQL safely.
     Handles parameter conversion automatically to prevent driver crashes.
     """
+    # ROBUST PARAMETER NORMALIZATION (Moved to the top)
+    if params is None:
+        safe_params = ()
+    elif isinstance(params, (list, tuple, dict)):
+        safe_params = params
+    else:
+        safe_params = (params,)
+
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            # ROBUST PARAMETER NORMALIZATION
-            if params is None:
-                safe_params = ()
-            elif isinstance(params, (list, tuple, dict)):
-                safe_params = params
-            else:
-                safe_params = (params,)
-                
             cursor.execute(query, safe_params)
             
             # If it's a SELECT query, fetch data into a DataFrame
@@ -57,19 +57,20 @@ def run_query(query, params=None):
     finally:
         conn.close()
 
+
 def execute_commit(query, params=None):
     """Executes INSERT, UPDATE, or DELETE queries and commits changes safely."""
+    # ROBUST PARAMETER NORMALIZATION (Moved to the top)
+    if params is None:
+        safe_params = ()
+    elif isinstance(params, (list, tuple, dict)):
+        safe_params = params
+    else:
+        safe_params = (params,)
+
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            # ROBUST PARAMETER NORMALIZATION
-            if params is None:
-                safe_params = ()
-            elif isinstance(params, (list, tuple, dict)):
-                safe_params = params
-            else:
-                safe_params = (params,)
-                
             cursor.execute(query, safe_params)
             conn.commit()
     except Exception as e:
