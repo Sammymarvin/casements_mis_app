@@ -8,7 +8,6 @@ import streamlit as st
 # ----------------------------------------------------
 # DATABASE CONFIGURATION
 # ----------------------------------------------------
-# Falls back to Streamlit secrets if available, otherwise uses explicit Supabase pooler parameters
 DB_HOST = st.secrets["postgres"]["host"] if "postgres" in st.secrets else "aws-1-eu-west-1.pooler.supabase.com"
 DB_USER = st.secrets["postgres"]["user"] if "postgres" in st.secrets else "postgres.kmxaxdmoxpbfklhiiuqz"
 DB_PASSWORD = st.secrets["postgres"]["password"] if "postgres" in st.secrets else "KU#7B6a.&McVg&P"
@@ -33,7 +32,7 @@ def run_query(query, params=None):
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            # PERMANENT FIX: Ensure params is never None or unsupported type
+            # ROBUST PARAMETER NORMALIZATION
             if params is None:
                 safe_params = ()
             elif isinstance(params, (list, tuple, dict)):
@@ -63,6 +62,7 @@ def execute_commit(query, params=None):
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
+            # ROBUST PARAMETER NORMALIZATION
             if params is None:
                 safe_params = ()
             elif isinstance(params, (list, tuple, dict)):
