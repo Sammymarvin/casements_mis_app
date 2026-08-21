@@ -4,7 +4,7 @@ import datetime
 import psycopg2
 import psycopg2.extras
 
-# Supabase Shared Pooler Parameters (from your dashboard)
+# Supabase Shared Pooler Parameters
 DB_HOST = "aws-1-eu-west-1.pooler.supabase.com"
 DB_USER = "postgres.kmxaxdmoxpbfklhiiuqz"
 DB_PASSWORD = "KU#7B6a.&McVg&P"
@@ -12,32 +12,19 @@ DB_NAME = "postgres"
 DB_PORT = "5432"
 
 def get_connection():
-    """Establish and return a connection to the Supabase pooler."""
+    """Establish and return a clean connection to the Supabase pooler for Pandas & standard operations."""
     return psycopg2.connect(
         host=DB_HOST,
         user=DB_USER,
         password=DB_PASSWORD,
         database=DB_NAME,
-        port=DB_PORT,
-        cursor_factory=psycopg2.extras.DictCursor
-    )
-
-def get_connection():
-    """Establish and return a connection to the Supabase PostgreSQL database."""
-    return psycopg2.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME,
-        port=DB_PORT,
-        cursor_factory=psycopg2.extras.DictCursor
+        port=DB_PORT
     )
 
 def run_query(query, params=None):
     """Executes a SELECT query using psycopg2 and returns a pandas DataFrame."""
     conn = get_connection()
     try:
-        # Pandas reads SQL smoothly with psycopg2 connections
         return pd.read_sql(query, conn, params=params)
     finally:
         conn.close()
@@ -56,7 +43,7 @@ def execute_commit(query, params=None):
 def seed_master_configurations():
     """Seeds the initial team roster and master dropdown options into the database."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     try:
         # 1. Team Members & Roles
@@ -272,7 +259,7 @@ def import_daily_activities_excel(file_path):
     
     imported_count = 0
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     try:
         for idx, row in df.iterrows():
