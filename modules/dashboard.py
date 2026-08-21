@@ -67,27 +67,44 @@ def render_dashboard():
     st.markdown("---")
     
     # ----------------------------------------------------
-    # 2. EXECUTIVE LEADERBOARD QUERY
+    # 2. EXECUTIVE LEADERBOARD QUERY (PostgreSQL Optimized)
     # ----------------------------------------------------
     st.subheader(f"🏆 Sales Executive Leaderboard ({selected_month})")
     
-    leaderboard_query = """
-        SELECT 
-            u.full_name as "Sales Executive",
-            COUNT(o.opportunity_id) as "Total Deals",
-            COALESCE(SUM(o.quotation_amount), 0) as "Quoted Value (UGX)",
-            COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) as "Revenue Won (UGX)",
-            COALESCE(SUM(o.amount_paid), 0) as "Collections (UGX)"
-        FROM users u
-        LEFT JOIN opportunities o ON u.user_id = o.sales_executive_id 
-            AND (%s = 'All Time' OR TO_CHAR(o.date_entered, 'YYYY-MM') = %s)
-        WHERE u.role IN ('Sales Executive', 'General Manager')
-        GROUP BY u.user_id, u.full_name
-        ORDER BY COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) DESC,
-                 COUNT(o.opportunity_id) DESC;
-    """
-    
-    leaderboard_params = (selected_month, selected_month)
+    if selected_month != "All Time":
+        leaderboard_query = """
+            SELECT 
+                u.full_name as "Sales Executive",
+                COUNT(o.opportunity_id) as "Total Deals",
+                COALESCE(SUM(o.quotation_amount), 0) as "Quoted Value (UGX)",
+                COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) as "Revenue Won (UGX)",
+                COALESCE(SUM(o.amount_paid), 0) as "Collections (UGX)"
+            FROM users u
+            LEFT JOIN opportunities o ON u.user_id = o.sales_executive_id 
+                AND TO_CHAR(o.date_entered, 'YYYY-MM') = %s
+            WHERE u.role IN ('Sales Executive', 'General Manager')
+            GROUP BY u.user_id, u.full_name
+            ORDER BY COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) DESC,
+                     COUNT(o.opportunity_id) DESC;
+        """
+        leaderboard_params = (selected_month,)
+    else:
+        leaderboard_query = """
+            SELECT 
+                u.full_name as "Sales Executive",
+                COUNT(o.opportunity_id) as "Total Deals",
+                COALESCE(SUM(o.quotation_amount), 0) as "Quoted Value (UGX)",
+                COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) as "Revenue Won (UGX)",
+                COALESCE(SUM(o.amount_paid), 0) as "Collections (UGX)"
+            FROM users u
+            LEFT JOIN opportunities o ON u.user_id = o.sales_executive_id 
+            WHERE u.role IN ('Sales Executive', 'General Manager')
+            GROUP BY u.user_id, u.full_name
+            ORDER BY COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) DESC,
+                     COUNT(o.opportunity_id) DESC;
+        """
+        leaderboard_params = None
+
     df_leaderboard = run_query(leaderboard_query, leaderboard_params)
         
     st.dataframe(df_leaderboard, use_container_width=True, hide_index=True)
