@@ -6,7 +6,7 @@ from ui.theme import render_header
 
 def get_setting_options(category_key):
     """Utility to fetch active options from system_settings."""
-    df = run_query("SELECT item_value FROM system_settings WHERE category = ? AND is_active = 1", (category_key,))
+    df = run_query("SELECT item_value FROM system_settings WHERE category = %s AND is_active = 1", (category_key,))
     return df['item_value'].tolist() if not df.empty else ["N/A"]
 
 def render_master_entry():
@@ -42,22 +42,22 @@ def render_master_entry():
     query_all = """
         SELECT 
             o.opportunity_id,
-            o.record_code AS [Code],
-            o.date_entered AS [Date],
-            u.full_name AS [Sales Exec],
-            c.company_name AS [Client Name],
-            c.phone AS [Contact Number],
-            o.project_type AS [Project],
-            o.scope_of_work AS [Scope],
-            o.site_location AS [Location],
-            o.site_status AS [Site Status],
-            o.measurement_status AS [Meas. Status],
-            o.quotation_amount AS [Quotation (UGX)],
-            o.amount_paid AS [Paid (UGX)],
-            (o.quotation_amount - o.amount_paid) AS [Balance (UGX)],
-            o.deal_status AS [Deal Status],
-            o.reason_for_loss AS [Reason for Loss],
-            o.next_followup_date AS [Next Follow-Up]
+            o.record_code AS "Code",
+            o.date_entered AS "Date",
+            u.full_name AS "Sales Exec",
+            c.company_name AS "Client Name",
+            c.phone AS "Contact Number",
+            o.project_type AS "Project",
+            o.scope_of_work AS "Scope",
+            o.site_location AS "Location",
+            o.site_status AS "Site Status",
+            o.measurement_status AS "Meas. Status",
+            o.quotation_amount AS "Quotation (UGX)",
+            o.amount_paid AS "Paid (UGX)",
+            (o.quotation_amount - o.amount_paid) AS "Balance (UGX)",
+            o.deal_status AS "Deal Status",
+            o.reason_for_loss AS "Reason for Loss",
+            o.next_followup_date AS "Next Follow-Up"
         FROM opportunities o
         LEFT JOIN users u ON o.sales_executive_id = u.user_id
         LEFT JOIN clients c ON o.client_id = c.client_id
@@ -176,27 +176,27 @@ def render_master_entry():
                 if not client_name.strip():
                     st.error("Please enter a Client / Company Name before saving.")
                 else:
-                    # Get or Create Client
-                    existing_client = run_query("SELECT client_id FROM clients WHERE company_name = ?", (client_name.strip(),))
+                    # Get or Create Client (Fixed ? to %s)
+                    existing_client = run_query("SELECT client_id FROM clients WHERE company_name = %s", (client_name.strip(),))
                     if existing_client.empty:
-                        execute_commit("INSERT INTO clients (company_name, phone) VALUES (?, ?)", (client_name.strip(), contact_number.strip()))
-                        client_id = int(run_query("SELECT client_id FROM clients WHERE company_name = ?", (client_name.strip(),)).iloc[0]['client_id'])
+                        execute_commit("INSERT INTO clients (company_name, phone) VALUES (%s, %s)", (client_name.strip(), contact_number.strip()))
+                        client_id = int(run_query("SELECT client_id FROM clients WHERE company_name = %s", (client_name.strip(),)).iloc[0]['client_id'])
                     else:
                         client_id = int(existing_client.iloc[0]['client_id'])
                         if contact_number.strip():
-                            execute_commit("UPDATE clients SET phone = ? WHERE client_id = ?", (contact_number.strip(), client_id))
+                            execute_commit("UPDATE clients SET phone = %s WHERE client_id = %s", (contact_number.strip(), client_id))
                     
-                    # Get Exec ID
-                    user_res = run_query("SELECT user_id FROM users WHERE full_name = ?", (sales_exec,))
+                    # Get Exec ID (Fixed ? to %s)
+                    user_res = run_query("SELECT user_id FROM users WHERE full_name = %s", (sales_exec,))
                     exec_id = int(user_res.iloc[0]['user_id']) if not user_res.empty else 1
 
-                    # Save Opportunity
+                    # Save Opportunity (Fixed ? to %s)
                     query_opp = """
                         INSERT INTO opportunities 
                         (record_code, date_entered, sales_executive_id, client_id, project_type, 
                          scope_of_work, site_location, site_status, measurement_status, 
                          quotation_amount, amount_paid, deal_status, reason_for_loss, next_followup_date)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     execute_commit(query_opp, (
                         record_code, date_entered, exec_id, client_id, project_type,
@@ -265,7 +265,8 @@ def render_master_entry():
                 selected_id = record_options[selected_label]
                 current_rec = filtered_df[filtered_df['opportunity_id'] == selected_id].iloc[0]
 
-                client_id_res = run_query("SELECT client_id FROM opportunities WHERE opportunity_id = ?", (selected_id,))
+                # Fixed ? to %s
+                client_id_res = run_query("SELECT client_id FROM opportunities WHERE opportunity_id = %s", (selected_id,))
                 current_client_id = int(client_id_res.iloc[0]['client_id']) if not client_id_res.empty else None
 
                 with st.form("update_opportunity_form"):
@@ -275,7 +276,6 @@ def render_master_entry():
                         upd_client_name = st.text_input("Client / Company Name", value=str(current_rec['Client Name']))
                         upd_contact_num = st.text_input("Contact Number", value=str(current_rec['Contact Number'] or ''))
                         
-                        # --- SAFE FALLBACK INDEXING FOR MOBILE/DESKTOP ---
                         current_exec_name = str(current_rec['Sales Exec'])
                         if current_exec_name not in sales_execs and current_exec_name and current_exec_name != 'None':
                             sales_execs.append(current_exec_name)
@@ -344,25 +344,25 @@ def render_master_entry():
                     update_submitted = st.form_submit_button("🚀 Post & Commit All Updates", type="primary", use_container_width=True)
 
                     if update_submitted:
-                        # 1. Update Client Table Data
+                        # 1. Update Client Table Data (Fixed ? to %s)
                         if current_client_id:
                             execute_commit(
-                                "UPDATE clients SET company_name = ?, phone = ? WHERE client_id = ?",
+                                "UPDATE clients SET company_name = %s, phone = %s WHERE client_id = %s",
                                 (upd_client_name.strip(), upd_contact_num.strip(), current_client_id)
                             )
 
-                        # 2. Map Sales Exec ID
-                        exec_user_res = run_query("SELECT user_id FROM users WHERE full_name = ?", (upd_sales_exec,))
+                        # 2. Map Sales Exec ID (Fixed ? to %s)
+                        exec_user_res = run_query("SELECT user_id FROM users WHERE full_name = %s", (upd_sales_exec,))
                         upd_exec_id = int(exec_user_res.iloc[0]['user_id']) if not exec_user_res.empty else 1
 
-                        # 3. Post Updates to Opportunities Table
+                        # 3. Post Updates to Opportunities Table (Fixed ? to %s)
                         execute_commit("""
                             UPDATE opportunities
-                            SET sales_executive_id = ?, scope_of_work = ?, site_location = ?,
-                                deal_status = ?, reason_for_loss = ?, site_status = ?, 
-                                measurement_status = ?, quotation_amount = ?, amount_paid = ?, 
-                                next_followup_date = ?
-                            WHERE opportunity_id = ?
+                            SET sales_executive_id = %s, scope_of_work = %s, site_location = %s,
+                                deal_status = %s, reason_for_loss = %s, site_status = %s, 
+                                measurement_status = %s, quotation_amount = %s, amount_paid = %s, 
+                                next_followup_date = %s
+                            WHERE opportunity_id = %s
                         """, (
                             upd_exec_id, upd_scope, upd_location,
                             upd_deal_status, upd_reason_loss, upd_site_status, 
