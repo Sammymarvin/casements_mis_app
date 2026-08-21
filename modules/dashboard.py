@@ -9,7 +9,7 @@ def render_dashboard():
     # DYNAMIC MONTH SELECTION
     # ----------------------------------------------------
     months_query = """
-        SELECT DISTINCT TO_CHAR(date_entered, '%%Y-%%m') as month_val 
+        SELECT DISTINCT TO_CHAR(date_entered, 'YYYY-MM') as month_val 
         FROM opportunities 
         WHERE date_entered IS NOT NULL 
         ORDER BY month_val DESC;
@@ -28,23 +28,29 @@ def render_dashboard():
     # ----------------------------------------------------
     # 1. EXECUTIVE SUMMARY METRICS QUERY
     # ----------------------------------------------------
-    where_clause = ""
-    metrics_params = None
-    
     if selected_month != "All Time":
-        where_clause = "WHERE TO_CHAR(date_entered, '%%Y-%%m') = %s"
+        metrics_query = """
+            SELECT 
+                COUNT(opportunity_id) as total_deals,
+                COALESCE(SUM(quotation_amount), 0) as total_quoted,
+                COALESCE(SUM(amount_paid), 0) as total_collected,
+                COALESCE(SUM(CASE WHEN deal_status = 'Success (Order Won)' THEN quotation_amount ELSE 0 END), 0) as total_revenue_won,
+                COALESCE(SUM(quotation_amount - amount_paid), 0) as total_outstanding
+            FROM opportunities
+            WHERE TO_CHAR(date_entered, 'YYYY-MM) = %s;
+        """
         metrics_params = (selected_month,)
-
-    metrics_query = f"""
-        SELECT 
-            COUNT(opportunity_id) as total_deals,
-            COALESCE(SUM(quotation_amount), 0) as total_quoted,
-            COALESCE(SUM(amount_paid), 0) as total_collected,
-            COALESCE(SUM(CASE WHEN deal_status = 'Success (Order Won)' THEN quotation_amount ELSE 0 END), 0) as total_revenue_won,
-            COALESCE(SUM(quotation_amount - amount_paid), 0) as total_outstanding
-        FROM opportunities
-        {where_clause};
-    """
+    else:
+        metrics_query = """
+            SELECT 
+                COUNT(opportunity_id) as total_deals,
+                COALESCE(SUM(quotation_amount), 0) as total_quoted,
+                COALESCE(SUM(amount_paid), 0) as total_collected,
+                COALESCE(SUM(CASE WHEN deal_status = 'Success (Order Won)' THEN quotation_amount ELSE 0 END), 0) as total_revenue_won,
+                COALESCE(SUM(quotation_amount - amount_paid), 0) as total_outstanding
+            FROM opportunities;
+        """
+        metrics_params = None
     
     df_metrics = run_query(metrics_query, metrics_params)
     row = df_metrics.iloc[0] if not df_metrics.empty else {
@@ -65,6 +71,7 @@ def render_dashboard():
     # ----------------------------------------------------
     st.subheader(f"🏆 Sales Executive Leaderboard ({selected_month})")
     
+    # Using a raw string without f-string formatting to avoid any % character conflict
     leaderboard_query = """
         SELECT 
             u.full_name as "Sales Executive",
@@ -74,14 +81,14 @@ def render_dashboard():
             COALESCE(SUM(o.amount_paid), 0) as "Collections (UGX)"
         FROM users u
         LEFT JOIN opportunities o ON u.user_id = o.sales_executive_id 
-            AND (%s IS NULL OR TO_CHAR(o.date_entered, '%%Y-%%m') = %s)
+            AND (%s = 'All Time' OR TO_CHAR(o.date_entered, 'YYYY-MM') = %s)
         WHERE u.role IN ('Sales Executive', 'General Manager')
         GROUP BY u.user_id, u.full_name
         ORDER BY COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) DESC,
                  COUNT(o.opportunity_id) DESC;
     """
     
-    leaderboard_params = (selected_month, selected_month) if selected_month != "All Time" else (None, None)
+    leaderboard_params = (selected_month, selected_month)
     df_leaderboard = run_query(leaderboard_query, leaderboard_params)
         
     st.dataframe(df_leaderboard, use_container_width=True, hide_index=True)
