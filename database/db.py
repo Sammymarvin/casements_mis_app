@@ -26,8 +26,13 @@ def run_query(query, params=None):
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute(query, params or ())
         
+        # PostgreSQL/psycopg2 requires standard execution formatting
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+            
         # Fetch column names and data rows
         colnames = [desc[0] for desc in cursor.description] if cursor.description else []
         rows = cursor.fetchall()
@@ -36,7 +41,7 @@ def run_query(query, params=None):
     finally:
         cursor.close()
         conn.close()
-        
+
 def execute_commit(query, params=None):
     """Executes INSERT, UPDATE, or DELETE queries and commits changes."""
     conn = get_connection()
