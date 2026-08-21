@@ -1,36 +1,33 @@
 import os
-import pymysql
 import pandas as pd
 import datetime
+import psycopg2
+import psycopg2.extras
 
-# cPanel MySQL connection parameters
-DB_HOST = "87.98.128.166"
-DB_USER = "favourwi_favourwi"
-DB_PASSWORD = "Admin@fav2026"
-DB_NAME = "favourwi_casements_mis"
+# Supabase PostgreSQL connection parameters
+DB_HOST = "db.kmxaxdmoxpbfklhiiuqz.supabase.co"
+DB_USER = "postgres"
+DB_PASSWORD = "KU#7B6a.&McVg&P"
+DB_NAME = "postgres"
+DB_PORT = "5432"
 
 def get_connection():
-    """Establish and return a connection to the cPanel MySQL database."""
-    return pymysql.connect(
+    """Establish and return a connection to the Supabase PostgreSQL database."""
+    return psycopg2.connect(
         host=DB_HOST,
         user=DB_USER,
         password=DB_PASSWORD,
         database=DB_NAME,
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor
+        port=DB_PORT,
+        cursor_factory=psycopg2.extras.DictCursor
     )
 
 def run_query(query, params=None):
-    """Executes a SELECT query using PyMySQL and returns a pandas DataFrame."""
+    """Executes a SELECT query using psycopg2 and returns a pandas DataFrame."""
     conn = get_connection()
     try:
-        with conn.cursor() as cursor:
-            # Execute query with optional parameters
-            cursor.execute(query, params or ())
-            result = cursor.fetchall()
-            
-        # Convert fetched dictionary rows directly into a Pandas DataFrame
-        return pd.DataFrame(result)
+        # Pandas reads SQL smoothly with psycopg2 connections
+        return pd.read_sql(query, conn, params=params)
     finally:
         conn.close()
 
@@ -61,7 +58,7 @@ def seed_master_configurations():
         for name, role in team_members:
             cursor.execute("""
                 INSERT INTO users (full_name, role) 
-                SELECT * FROM (SELECT %s AS fn, %s AS rl) AS tmp
+                SELECT %s, %s
                 WHERE NOT EXISTS (SELECT 1 FROM users WHERE full_name = %s)
             """, (name, role, name))
 
@@ -93,7 +90,7 @@ def seed_master_configurations():
             for item in items:
                 cursor.execute("""
                     INSERT INTO system_settings (category, item_value)
-                    SELECT * FROM (SELECT %s AS cat, %s AS val) AS tmp
+                    SELECT %s, %s
                     WHERE NOT EXISTS (
                         SELECT 1 FROM system_settings WHERE category = %s AND item_value = %s
                     )
@@ -105,7 +102,7 @@ def seed_master_configurations():
         conn.close()
 
 def init_db():
-    """Initializes all required database tables in MySQL if they do not exist."""
+    """Initializes all required database tables in PostgreSQL if they do not exist."""
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -113,19 +110,19 @@ def init_db():
         # 1. Users Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            user_id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id SERIAL PRIMARY KEY,
             full_name VARCHAR(100) NOT NULL,
             email VARCHAR(150) UNIQUE,
             role VARCHAR(50) NOT NULL,
-            is_active TINYINT DEFAULT 1,
+            is_active INT DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB;
+        );
         """)
 
         # 2. Clients Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS clients (
-            client_id INT AUTO_INCREMENT PRIMARY KEY,
+            client_id SERIAL PRIMARY KEY,
             company_name VARCHAR(150) NOT NULL,
             contact_person VARCHAR(100),
             phone VARCHAR(50),
@@ -133,23 +130,23 @@ def init_db():
             district VARCHAR(100),
             region VARCHAR(100),
             market_segment VARCHAR(100)
-        ) ENGINE=InnoDB;
+        );
         """)
 
         # 3. Dynamic System Settings Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS system_settings (
-            setting_id INT AUTO_INCREMENT PRIMARY KEY,
+            setting_id SERIAL PRIMARY KEY,
             category VARCHAR(100) NOT NULL,
             item_value VARCHAR(255) NOT NULL,
-            is_active TINYINT DEFAULT 1
-        ) ENGINE=InnoDB;
+            is_active INT DEFAULT 1
+        );
         """)
 
         # 4. Opportunities Master Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS opportunities (
-            opportunity_id INT AUTO_INCREMENT PRIMARY KEY,
+            opportunity_id SERIAL PRIMARY KEY,
             record_code VARCHAR(100) UNIQUE,
             date_entered DATE NOT NULL,
             sales_executive_id INT NOT NULL,
@@ -159,21 +156,21 @@ def init_db():
             site_location VARCHAR(150),
             site_status VARCHAR(50) DEFAULT 'Pending',
             measurement_status VARCHAR(50) DEFAULT 'Pending',
-            quotation_amount DOUBLE DEFAULT 0.0,
-            amount_paid DOUBLE DEFAULT 0.0,
+            quotation_amount DOUBLE PRECISION DEFAULT 0.0,
+            amount_paid DOUBLE PRECISION DEFAULT 0.0,
             deal_status VARCHAR(50) DEFAULT 'Pipeline',
             reason_for_loss VARCHAR(100) DEFAULT 'N/A - Won/Active',
             next_followup_date DATE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (sales_executive_id) REFERENCES users(user_id),
             FOREIGN KEY (client_id) REFERENCES clients(client_id)
-        ) ENGINE=InnoDB;
+        );
         """)
 
         # 5. Daily Activity Logs Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS daily_activity_logs (
-            log_id INT AUTO_INCREMENT PRIMARY KEY,
+            log_id SERIAL PRIMARY KEY,
             log_date DATE NOT NULL,
             sales_executive_id INT NOT NULL,
             new_companies_visited INT DEFAULT 0,
@@ -186,49 +183,49 @@ def init_db():
             remarks TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (sales_executive_id) REFERENCES users(user_id),
-            UNIQUE KEY unique_daily_log (log_date, sales_executive_id)
-        ) ENGINE=InnoDB;
+            CONSTRAINT unique_daily_log UNIQUE (log_date, sales_executive_id)
+        );
         """)
 
         # 6. Competitor Pricing Intelligence Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS competitor_intelligence (
-            intel_id INT AUTO_INCREMENT PRIMARY KEY,
+            intel_id SERIAL PRIMARY KEY,
             competitor_name VARCHAR(150) NOT NULL,
             product_scope VARCHAR(150) NOT NULL,
-            estimated_sqm_rate DOUBLE DEFAULT 0.0,
+            estimated_sqm_rate DOUBLE PRECISION DEFAULT 0.0,
             win_rate_impact VARCHAR(100),
             perced_quality VARCHAR(100),
             notes TEXT,
-            recorded_date DATE DEFAULT (CURRENT_DATE)
-        ) ENGINE=InnoDB;
+            recorded_date DATE DEFAULT CURRENT_DATE
+        );
         """)
 
         # 7. Customer Sentiment & Feedback Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS customer_feedback (
-            feedback_id INT AUTO_INCREMENT PRIMARY KEY,
+            feedback_id SERIAL PRIMARY KEY,
             client_id INT,
             satisfaction_score INT,
             pricing_perception VARCHAR(100),
             quality_rating VARCHAR(100),
             feedback_comments TEXT,
-            feedback_date DATE DEFAULT (CURRENT_DATE),
+            feedback_date DATE DEFAULT CURRENT_DATE,
             FOREIGN KEY (client_id) REFERENCES clients(client_id)
-        ) ENGINE=InnoDB;
+        );
         """)
 
         # 8. PRO Monthly KPI Tracking Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS pro_kpi_logs (
-            log_id INT AUTO_INCREMENT PRIMARY KEY,
+            log_id SERIAL PRIMARY KEY,
             log_month VARCHAR(50) NOT NULL,
             pr_campaigns INT DEFAULT 0,
             press_releases INT DEFAULT 0,
             project_showcases INT DEFAULT 0,
             testimonials_obtained INT DEFAULT 0,
-            brand_compliance_pct DOUBLE DEFAULT 100.0,
-            reputation_issues_resolved_pct DOUBLE DEFAULT 100.0,
+            brand_compliance_pct DOUBLE PRECISION DEFAULT 100.0,
+            reputation_issues_resolved_pct DOUBLE PRECISION DEFAULT 100.0,
             tiktok_posts INT DEFAULT 0,
             tiktok_views INT DEFAULT 0,
             facebook_posts INT DEFAULT 0,
@@ -238,15 +235,15 @@ def init_db():
             linkedin_posts INT DEFAULT 0,
             x_posts INT DEFAULT 0,
             x_impressions INT DEFAULT 0,
-            x_engagement_rate DOUBLE DEFAULT 0.0,
+            x_engagement_rate DOUBLE PRECISION DEFAULT 0.0,
             x_followers_growth INT DEFAULT 0,
             website_updates INT DEFAULT 0,
             website_visitors INT DEFAULT 0,
             whatsapp_enquiries INT DEFAULT 0,
-            csat_rating DOUBLE DEFAULT 95.0,
-            complaints_resolved_pct DOUBLE DEFAULT 100.0,
-            recorded_date DATE DEFAULT (CURRENT_DATE)
-        ) ENGINE=InnoDB;
+            csat_rating DOUBLE PRECISION DEFAULT 95.0,
+            complaints_resolved_pct DOUBLE PRECISION DEFAULT 100.0,
+            recorded_date DATE DEFAULT CURRENT_DATE
+        );
         """)
 
         conn.commit()
@@ -258,7 +255,7 @@ def init_db():
     seed_master_configurations()
 
 def import_daily_activities_excel(file_path):
-    """Imports daily activity entries from an uploaded Excel file using MySQL UPSERT logic."""
+    """Imports daily activity entries from an uploaded Excel file using PostgreSQL UPSERT logic."""
     df = pd.read_excel(file_path)
     df.columns = df.columns.str.strip()
     
@@ -303,26 +300,28 @@ def import_daily_activities_excel(file_path):
                 cursor.execute("INSERT INTO users (full_name, role) VALUES (%s, 'Sales Executive')", (sales_person,))
                 conn.commit()
                 cursor.execute("SELECT user_id FROM users WHERE LOWER(full_name) = LOWER(%s)", (sales_person,))
-                user_id = cursor.fetchone()['user_id']
+                user_res = cursor.fetchone()
+                user_id = user_res['user_id']
             else:
                 user_id = user_res['user_id']
 
-            # 2. Insert or Update record in daily_activity_logs using MySQL ON DUPLICATE KEY UPDATE
+            # 2. Insert or Update record using PostgreSQL ON CONFLICT DO UPDATE
             query = """
                 INSERT INTO daily_activity_logs 
                 (log_date, sales_executive_id, new_companies_visited, telephone_calls, 
                  emails_sent, meetings_held, new_leads_generated, daily_challenges, 
                  management_support_needed, remarks)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE
-                    new_companies_visited = VALUES(new_companies_visited),
-                    telephone_calls = VALUES(telephone_calls),
-                    emails_sent = VALUES(emails_sent),
-                    meetings_held = VALUES(meetings_held),
-                    new_leads_generated = VALUES(new_leads_generated),
-                    daily_challenges = VALUES(daily_challenges),
-                    management_support_needed = VALUES(management_support_needed),
-                    remarks = VALUES(remarks);
+                ON CONFLICT (log_date, sales_executive_id)
+                DO UPDATE SET
+                    new_companies_visited = EXCLUDED.new_companies_visited,
+                    telephone_calls = EXCLUDED.telephone_calls,
+                    emails_sent = EXCLUDED.emails_sent,
+                    meetings_held = EXCLUDED.meetings_held,
+                    new_leads_generated = EXCLUDED.new_leads_generated,
+                    daily_challenges = EXCLUDED.daily_challenges,
+                    management_support_needed = EXCLUDED.management_support_needed,
+                    remarks = EXCLUDED.remarks;
             """
             params = (
                 log_date, user_id, new_companies_visited, telephone_calls,
