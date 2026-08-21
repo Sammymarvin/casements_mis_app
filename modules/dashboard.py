@@ -9,9 +9,9 @@ def render_dashboard():
     # DYNAMIC MONTH SELECTION
     # ----------------------------------------------------
     months_query = """
-        SELECT DISTINCT strftime('%Y-%m', date_entered) as month_val 
+        SELECT DISTINCT TO_CHAR(date_entered, 'YYYY-MM') as month_val 
         FROM opportunities 
-        WHERE date_entered IS NOT NULL AND date_entered != ''
+        WHERE date_entered IS NOT NULL 
         ORDER BY month_val DESC;
     """
     try:
@@ -29,11 +29,11 @@ def render_dashboard():
     # 1. EXECUTIVE SUMMARY METRICS QUERY
     # ----------------------------------------------------
     where_clause = ""
-    metrics_params = []
+    metrics_params = None
     
     if selected_month != "All Time":
-        where_clause = "WHERE strftime('%Y-%m', date_entered) = ?"
-        metrics_params = [selected_month]
+        where_clause = "WHERE TO_CHAR(date_entered, 'YYYY-MM') = %s"
+        metrics_params = (selected_month,)
 
     metrics_query = f"""
         SELECT 
@@ -46,7 +46,7 @@ def render_dashboard():
         {where_clause};
     """
     
-    df_metrics = run_query(metrics_query, metrics_params) if metrics_params else run_query(metrics_query)
+    df_metrics = run_query(metrics_query, metrics_params)
     row = df_metrics.iloc[0] if not df_metrics.empty else {
         "total_deals": 0, "total_quoted": 0, "total_revenue_won": 0, "total_outstanding": 0
     }
@@ -65,25 +65,23 @@ def render_dashboard():
     # ----------------------------------------------------
     st.subheader(f"🏆 Sales Executive Leaderboard ({selected_month})")
     
-    # UPDATED: Filters by both 'Sales Executive' and 'General Manager' roles 
-    # so all team roster members show up even with 0 deals logged
     leaderboard_query = """
         SELECT 
-            u.full_name as 'Sales Executive',
-            COUNT(o.opportunity_id) as 'Total Deals',
-            COALESCE(SUM(o.quotation_amount), 0) as 'Quoted Value (UGX)',
-            COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) as 'Revenue Won (UGX)',
-            COALESCE(SUM(o.amount_paid), 0) as 'Collections (UGX)'
+            u.full_name as "Sales Executive",
+            COUNT(o.opportunity_id) as "Total Deals",
+            COALESCE(SUM(o.quotation_amount), 0) as "Quoted Value (UGX)",
+            COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) as "Revenue Won (UGX)",
+            COALESCE(SUM(o.amount_paid), 0) as "Collections (UGX)"
         FROM users u
         LEFT JOIN opportunities o ON u.user_id = o.sales_executive_id 
-            AND (? IS NULL OR strftime('%Y-%m', o.date_entered) = ?)
+            AND (%s IS NULL OR TO_CHAR(o.date_entered, 'YYYY-MM') = %s)
         WHERE u.role IN ('Sales Executive', 'General Manager')
         GROUP BY u.user_id, u.full_name
         ORDER BY COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) DESC,
                  COUNT(o.opportunity_id) DESC;
     """
     
-    leaderboard_params = [selected_month, selected_month] if selected_month != "All Time" else [None, None]
+    leaderboard_params = (selected_month, selected_month) if selected_month != "All Time" else (None, None)
     df_leaderboard = run_query(leaderboard_query, leaderboard_params)
         
     st.dataframe(df_leaderboard, use_container_width=True, hide_index=True)
