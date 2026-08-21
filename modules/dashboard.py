@@ -9,7 +9,7 @@ def render_dashboard():
     # DYNAMIC MONTH SELECTION
     # ----------------------------------------------------
     months_query = """
-        SELECT DISTINCT TO_CHAR(date_entered, 'YYYY-MM') as month_val 
+        SELECT DISTINCT TO_CHAR(date_entered, '%%Y-%%m') as month_val 
         FROM opportunities 
         WHERE date_entered IS NOT NULL 
         ORDER BY month_val DESC;
@@ -32,7 +32,7 @@ def render_dashboard():
     metrics_params = None
     
     if selected_month != "All Time":
-        where_clause = "WHERE TO_CHAR(date_entered, 'YYYY-MM') = %s"
+        where_clause = "WHERE TO_CHAR(date_entered, '%%Y-%%m') = %s"
         metrics_params = (selected_month,)
 
     metrics_query = f"""
@@ -74,7 +74,7 @@ def render_dashboard():
             COALESCE(SUM(o.amount_paid), 0) as "Collections (UGX)"
         FROM users u
         LEFT JOIN opportunities o ON u.user_id = o.sales_executive_id 
-            AND (%s IS NULL OR TO_CHAR(o.date_entered, 'YYYY-MM') = %s)
+            AND (%s IS NULL OR TO_CHAR(o.date_entered, '%%Y-%%m') = %s)
         WHERE u.role IN ('Sales Executive', 'General Manager')
         GROUP BY u.user_id, u.full_name
         ORDER BY COALESCE(SUM(CASE WHEN o.deal_status = 'Success (Order Won)' THEN o.quotation_amount ELSE 0 END), 0) DESC,
