@@ -22,13 +22,21 @@ def get_connection():
     )
 
 def run_query(query, params=None):
-    """Executes a SELECT query using psycopg2 and returns a pandas DataFrame."""
+    """Executes a SELECT query using a direct psycopg2 cursor and returns a pandas DataFrame."""
     conn = get_connection()
     try:
-        return pd.read_sql(query, conn, params=params)
+        cursor = conn.cursor()
+        cursor.execute(query, params or ())
+        
+        # Fetch column names and data rows
+        colnames = [desc[0] for desc in cursor.description] if cursor.description else []
+        rows = cursor.fetchall()
+        
+        return pd.DataFrame(rows, columns=colnames)
     finally:
+        cursor.close()
         conn.close()
-
+        
 def execute_commit(query, params=None):
     """Executes INSERT, UPDATE, or DELETE queries and commits changes."""
     conn = get_connection()
