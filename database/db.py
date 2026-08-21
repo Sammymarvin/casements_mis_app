@@ -4,7 +4,7 @@ import pandas as pd
 import datetime
 
 # cPanel MySQL connection parameters
-DB_HOST = "localhost"
+DB_HOST = "favourwings.com"
 DB_USER = "favourwi_favourwi"
 DB_PASSWORD = "Admin@fav2026"
 DB_NAME = "favourwi_casements_mis"
@@ -21,13 +21,16 @@ def get_connection():
     )
 
 def run_query(query, params=None):
-    """Executes a SELECT query and returns a pandas DataFrame."""
+    """Executes a SELECT query using PyMySQL and returns a pandas DataFrame."""
     conn = get_connection()
     try:
-        # Replace SQLite style '?' placeholders with MySQL '%s' if necessary, 
-        # or pandas will handle parameters smoothly via read_sql with pymysql connector.
-        df = pd.read_sql(query, conn, params=params)
-        return df
+        with conn.cursor() as cursor:
+            # Execute query with optional parameters
+            cursor.execute(query, params or ())
+            result = cursor.fetchall()
+            
+        # Convert fetched dictionary rows directly into a Pandas DataFrame
+        return pd.DataFrame(result)
     finally:
         conn.close()
 
