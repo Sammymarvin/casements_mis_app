@@ -22,13 +22,14 @@ def get_connection():
     )
 
 def run_query(query, params=None):
-    """Executes a SELECT query using a direct psycopg2 cursor and returns a pandas DataFrame."""
+    """Executes a SELECT query using a direct psycopg2 cursor and returns a pandas DataFrame safely."""
     conn = get_connection()
+    cursor = conn.cursor()
     try:
-        cursor = conn.cursor()
-        
-        # PostgreSQL/psycopg2 requires standard execution formatting
-        if params:
+        # Normalize params to prevent type mismatch crashes with psycopg2
+        if params is not None:
+            if not isinstance(params, (list, tuple, dict)):
+                params = (params,)
             cursor.execute(query, params)
         else:
             cursor.execute(query)
@@ -43,10 +44,12 @@ def run_query(query, params=None):
         conn.close()
 
 def execute_commit(query, params=None):
-    """Executes INSERT, UPDATE, or DELETE queries and commits changes."""
+    """Executes INSERT, UPDATE, or DELETE queries and commits changes safely."""
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        if params is not None and not isinstance(params, (list, tuple, dict)):
+            params = (params,)
         cursor.execute(query, params or ())
         conn.commit()
     finally:
@@ -262,7 +265,6 @@ def init_db():
         cursor.close()
         conn.close()
 
-    # Automatically populate master options and team roster
     seed_master_configurations()
 
 def import_daily_activities_excel(file_path):
@@ -303,7 +305,6 @@ def import_daily_activities_excel(file_path):
             mgmt_support = str(row.get('Management Support Needed', '')).replace('nan', '').strip()
             remarks = str(row.get('Remarks', '')).replace('nan', '').strip()
 
-            # 1. Get or Create User ID for the Sales Person
             cursor.execute("SELECT user_id FROM users WHERE LOWER(full_name) = LOWER(%s)", (sales_person,))
             user_res = cursor.fetchone()
             
@@ -316,7 +317,6 @@ def import_daily_activities_excel(file_path):
             else:
                 user_id = user_res['user_id']
 
-            # 2. Insert or Update record using PostgreSQL ON CONFLICT DO UPDATE
             query = """
                 INSERT INTO daily_activity_logs 
                 (log_date, sales_executive_id, new_companies_visited, telephone_calls, 
