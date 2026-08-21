@@ -4,7 +4,7 @@ import pandas as pd
 import datetime
 
 # cPanel MySQL connection parameters
-DB_HOST = "favourwings.com"
+DB_HOST = "87.98.128.166"
 DB_USER = "favourwi_favourwi"
 DB_PASSWORD = "Admin@fav2026"
 DB_NAME = "favourwi_casements_mis"
