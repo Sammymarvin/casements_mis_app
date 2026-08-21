@@ -1,389 +1,186 @@
 import sqlite3
 import pandas as pd
-import datetime
-from datetime import datetime as dt
-import os
+import io
 
-DB_NAME = "casements_mis.db"
+# Raw dataset
+csv_data = """opportunity_id\tCode\tDate\tSales Exec\tClient Name\tContact Number\tProject\tScope\tLocation\tSite Status\tMeas. Status\tQuotation (UGX)\tPaid (UGX)\tBalance (UGX)\tDeal Status\tReason for Loss\tNext Follow-Up
+153\tCAL-2026-4925\t8/21/2026\tAnna\tMADAM XUMEL ALIANA\t766977777\tResidential\tAluminium Windows & Doors\tKampala\tNot Ready\tApproved\t16756491\t0\t16756491\tProspect\tN/A - Won/Active\t8/31/2026
+130\tCAL-2026-4056\t8/12/2026\tSandra\tMRS. MITI BARBARA\t+256 701 569063\tCommercial\tAluminium Windows & Doors\tKampala\tNot Ready\tTaken\t28006896.17\t0\t28006896.17\tProspect\tN/A - Won/Active\t8/19/2026
+142\tCAL-2026-1054\t8/11/2026\tjoseph\tMs Docus\t773449718\tResidential\tAluminium Windows & Doors\tseguku\tNot Ready\tTaken\t62522220\t0\t62522220\tProspect\tN/A - Won/Active\t8/18/2026
+141\tCAL-2026-1252\t8/11/2026\tjoseph\tMIKE\t772493452\tResidential\tAluminium Windows & Doors\tKYEBANDO\tNot Ready\tPending\t242126424\t0\t242126424\tProspect\tN/A - Won/Active\t8/18/2026
+140\tCAL-2026-1433\t8/11/2026\tjoseph\tMR STEPHEN\t\tResidential\tAluminium Windows & Doors\tNTUNGAMO\tNot Ready\tPending\t79180469.2\t0\t79180469.2\tProspect\tN/A - Won/Active\t8/18/2026
+139\tCAL-2026-4033\t8/11/2026\tSandra\tMR. STEVEN MWES\t9133402195\tResidential\tAluminium Windows & Doors\tNtungamo\tSite Ready\tTaken\t79180469.2\t0\t79180469.2\tProspect\tN/A - Won/Active\t8/18/2026
+138\tCAL-2026-4054\t8/11/2026\tAnna\tAFOM CONTRUCTIONS\t783917965\tResidential\tAluminium Windows & Doors\t\tPending\tPending\t18504227\t0\t\tN/A - Won/Active\tN/A - Won/Active\t8/18/2026
+137\tCAL-2026-4109\t8/11/2026\tAnna\tMADAM LYDIA\tUNIPORTS\tCommercial\tAluminium Windows & Doors\t\tPending\tPending\t22254800\t0\t\tProspect\tN/A - Won/Active\t8/18/2026
+136\tCAL-2026-4826\t8/11/2026\tAnna\tMr.David Entebbe\t785290578\tResidential\tAluminium Windows & Doors\tEntebbe\tIn Progress\tTaken\t126574062\t0\t126574062\tNegotiation\tN/A - Won/Active\t8/31/2026
+135\tCAL-2026-5745\t8/11/2026\tAnna\tMr. Tom Rujjumba\t753366955\tCommercial\tAluminium Windows & Doors\tfort portal\tSite Ready\tTaken\t14154548\t12954459\t1200089\tQualified Lead\tN/A - Won/Active\t8/31/2026
+134\tCAL-2026-4628\t8/11/2026\tAnna\tMr.Rashid\t772843382\tCommercial\tAluminium Windows & Doors\tBakuri\tIn Progress\tPending\t1465560\t0\t1465560\tNegotiation\tN/A - Won/Active\t8/31/2026
+133\tCAL-2026-0632\t8/11/2026\tAnna\tMr. Micheal\t772527622\tResidential\tAluminium Windows & Doors\tNtinda\tNot Ready\tTaken\t339334\t339334\t0\tSuccess (Order Won)\tN/A - Won/Active\t8/18/2026
+132\tCAL-2026-4813\t8/11/2026\tAnna\tMr.Esami\t702720808\tResidential\tAluminium Windows & Doors\tKampala\tSite Ready\tTaken\t2585000\t1809500\t775500\tProspect\tN/A - Won/Active\t8/31/2026
+131\tCAL-2026-0637\t8/11/2026\tSandra\tDr. David Ndawula\t2.57E+11\tResidential\tSteel Fabrication\tNakakololo- Gayaza\tSite Ready\tTaken\t4500000\t0\t4500000\tProspect\tN/A - Won/Active\t8/18/2026
+145\tCAL-2026-4017\t8/10/2026\tDoreen\tMR AKENA ERIC\t2.57E+11\tResidential\tAluminium Windows & Doors\tKampala\tSite Ready\tApproved\t24000000\t10000000\t14000000\tSuccess (Order Won)\tN/A - Won/Active\t8/17/2026
+144\tCAL-2026-4152\t8/10/2026\tDoreen\tCHARLES OUMA\t\tResidential\tAluminium Windows & Doors\tKampala\tSite Ready\tApproved\t9538000\t9538000\t0\tSuccess (Order Won)\tN/A - Won/Active\t8/17/2026
+143\tCAL-2026-4422\t8/10/2026\tDoreen\tISA KAJUBI\t0702436427 \\ +256785578484\tResidential\tAluminium Windows & Doors\tKampala\tSite Ready\tApproved\t1803153960\t9040000\t1794113960\tProspect\tN/A - Won/Active\t8/17/2026
+103\tREC-0017\t8/6/2026\tSandra\tIbero Coffee\t27836673818\tIndustrial\tSteel Fabrication\tNAMANVE\tNot Ready\tPending\t44657808\t0\t44657808\tProspect\tN/A - Won/Active\t
+102\tREC-0016\t8/5/2026\tSandra\tIbero Coffee\t27836673818\tIndustrial\tSteel Fabrication\tNAMANVE\tNot Ready\tPending\t46020000\t0\t46020000\tProspect\tN/A - Won/Active\t
+101\tREC-0015\t8/4/2026\tSandra\tIbero Coffee\t27836673818\tIndustrial\tAluminium Windows & Doors\tNAMANVE\tNot Ready\tPending\t55518467\t0\t55518467\tProspect\tN/A - Won/Active\t
+128\tREC-0042\t8/3/2026\tDoreen\tL.A LIVING SPACE\t\tResidential\tAluminium Windows & Doors\tKUNGU\tSite Ready\tApproved\t83000000\t35000000\t48000000\tSuccess (Order Won)\tN/A - Won/Active\t
+126\tREC-0040\t8/3/2026\tDoreen\tSARJAN\t700612924\tCommercial\tAluminium Windows & Doors\tKOLOLO\tIn Progress\tPending\t124700000\t0\t124700000\tQuotation Issued\tN/A - Won/Active\t
+125\tREC-0039\t8/3/2026\tDoreen\tssimbwa\t757135031\tResidential\tSteel Fabrication\tkakiri\tNot Ready\tTaken\t9230845\t0\t9230845\tQuotation Issued\tN/A - Won/Active\t
+100\tREC-0014\t8/3/2026\tSandra\tIbero Coffee\t27836673818\tIndustrial\tCurtain Walls\tNAMANVE\tNot Ready\tPending\t556393600\t0\t556393600\tProspect\tN/A - Won/Active\t
+99\tREC-0013\t8/2/2026\tSandra\tIbero Coffee\t27836673818\tIndustrial\tAluminium Windows & Doors\tNAMANVE\tNot Ready\tPending\t166095651\t0\t166095651\tProspect\tN/A - Won/Active\t
+129\tREC-0043\t8/1/2026\tDoreen\tBRENDAH\t772477200\tResidential\tSHOWER CABINS\tKIGO\tSite Ready\tTaken\t15847400\t0\t15847400\tQuotation Issued\tN/A - Won/Active\t
+127\tREC-0041\t8/1/2026\tDoreen\tEXCEL CONSTRUCTION\temma@excelconstruction.org\tCommercial\tAluminium Windows & Doors\tKOLOLO\tIn Progress\tPending\t2980582289\t0\t2980582289\tQuotation Issued\tN/A - Won/Active\t
+98\tREC-0012\t8/1/2026\tSandra\tIbero Coffee\t27836673818\tIndustrial\tAluminium Windows & Doors\tNAMANVE\tNot Ready\tPending\t135947576\t0\t135947576\tProspect\tN/A - Won/Active\t
+97\tREC-0011\t7/31/2026\tSandra\tMr. Oguttu Wilber\t2.57E+11\tResidential\tAluminium Windows & Doors\tBUSIA\tPending\tPending\t130000000\t0\t130000000\tProspect\tN/A - Won/Active\t
+96\tREC-0010\t7/30/2026\tSandra\tOpus Design\t2.57E+11\tIndustrial\tSteel Fabrication\tBULENGA\tPending\tPending\t21586600\t0\t21586600\tProspect\tN/A - Won/Active\t
+121\tREC-0035\t7/29/2026\tDoreen\tMR DAVID\t704731766\tResidential\tSteel Fabrication\tKAJJANSI\tIn Progress\tTaken\t5520000\t0\t5520000\tQuotation Issued\tN/A - Won/Active\t
+120\tREC-0034\t7/29/2026\tDoreen\tMR ISA\t702436427\tResidential\tAluminium Windows & Doors\tNAKIGALALA\tSite Ready\tTaken\t22925374\t0\t22925374\tProspect\tN/A - Won/Active\t
+119\tREC-0033\t7/29/2026\tDoreen\tASILI AGRICULTURAL\t766101562\tInstitutional\tUNIPORTS\t\tIn Progress\tTaken\t31813600\t0\t-31813600\tProspect\t29/7/2027\t
+118\tREC-0032\t7/29/2026\tDoreen\t3D SERVICE\t\tResidential\tSliding Doors\tBUNGA\tSite Ready\tTaken\t12140999\t9800000\t2340999\tSuccess (Order Won)\tN/A - Won/Active\t
+117\tREC-0031\t7/29/2026\tDoreen\tVIROGO\t\tResidential\tAluminium Windows & Doors\tMITYANA\tSite Ready\tTaken\t3160891\t3160891\t0\tSuccess (Order Won)\tN/A - Won/Active\t
+116\tREC-0030\t7/29/2026\tDoreen\tPONNI SAFARI CAMPS\t\tInstitutional\tUnipot\tKARAMOJA\tIn Progress\tTaken\t18354000\t18354000\t0\tSuccess (Order Won)\tN/A - Won/Active\t
+115\tREC-0029\t7/29/2026\tDoreen\tSBC UGANDA\t\tIndustrial\tSTAINLESS MIRROR\tAIRPORT\tSite Ready\tTaken\t19488585\t11561025\t7927560\tSuccess (Order Won)\tN/A - Won/Active\t
+95\tREC-0009\t7/29/2026\tSandra\tMr. Esami\t2.57E+11\tCommercial\tToughened Glass\tWANDEGAYA\tPending\tPending\t2585000\t0\t2585000\tProspect\tN/A - Won/Active\t
+122\tREC-0036\t7/28/2026\tDoreen\tMY KAYUMBA\t\tResidential\tSteel Fabrication\tKIGALI\tIn Progress\tTaken\t7363200\t0\t7363200\tQuotation Issued\tN/A - Won/Active\t
+94\tREC-0008\t7/28/2026\tSandra\tMr. Edgar\t2.57E+11\tResidential\tAluminium Windows & Doors\tNAGURU\tPending\tPending\t8500000\t0\t8500000\tProspect\tN/A - Won/Active\t
+93\tREC-0007\t7/27/2026\tSandra\tDr. Ndawula David\t2.57E+11\tResidential\tSteel Fabrication\tGAYAZA\tPending\tPending\t4511351\t0\t4511351\tProspect\tN/A - Won/Active\t
+92\tREC-0006\t7/26/2026\tSandra\tAndrew Amara\t2.57E+11\tCommercial\tAluminium Windows & Doors\tLUWEERO\tPending\tPending\t42909976\t0\t42909976\tProspect\tN/A - Won/Active\t
+91\tREC-0005\t7/25/2026\tSandra\tMadam Yudaya\t2.57E+11\tResidential\tAluminium Windows & Doors\tKIRA-NSASA\tPending\tPending\t132032328\t0\t132032328\tProspect\tN/A - Won/Active\t
+124\tREC-0038\t7/24/2026\tDoreen\tMS CAROLYNE\t772313112\tResidential\tAluminium Windows & Doors\tMUTUNDWE\tNot Ready\tTaken\t44041723\t0\t44041723\tQuotation Issued\tN/A - Won/Active\t
+90\tREC-0004\t7/24/2026\tSandra\tArch Forum\t2.57E+11\tCommercial\tAluminium Windows & Doors\tNTINDA\tPending\tPending\t311437363\t0\t311437363\tProspect\tN/A - Won/Active\t
+123\tREC-0037\t7/23/2026\tDoreen\tMR CHARLES\t782517278\tResidential\tAluminium Windows & Doors\tLUZIRA\tIn Progress\tTaken\t20494430\t0\t20494430\tProspect\tN/A - Won/Active\t
+114\tREC-0028\t7/23/2026\tAnna\tMr.Caleb\t2.57E+12\tResidential\tAluminium Windows & Doors\tJINJA\tNot Ready\tPending\t0\t0\t0\tProspect\tN/A - Won/Active\t
+113\tREC-0027\t7/23/2026\tAnna\tMr.Edward\t2.57E+11\tResidential\tAluminium Windows & Doors\tNASANA\tNot Ready\tPending\t0\t0\t0\tProspect\tN/A - Won/Active\t
+112\tREC-0026\t7/23/2026\tAnna\tMr.ODOI\t2.57E+11\tResidential\tAluminium Windows & Doors\tJINJA\tNot Ready\tPending\t0\t0\t0\tProspect\tN/A - Won/Active\t
+111\tREC-0025\t7/23/2026\tAnna\tMr.Erisa\t2.57E+11\tResidential\tAluminium Windows & Doors\tMBARARA\tNot Ready\tPending\t0\t0\t0\tProspect\tN/A - Won/Active\t
+110\tREC-0024\t7/23/2026\tAnna\tQUISA Constructions\t2.57E+11\tResidential\tAluminium Windows & Doors\tMBARARA\tNot Ready\tPending\t0\t0\t0\tProspect\tN/A - Won/Active\t
+109\tREC-0023\t7/23/2026\tAnna\tMr joel\t2.57E+11\tResidential\tSteel Fabrication\tWAKISO\tNot Ready\tPending\t0\t0\t0\tProspect\tN/A - Won/Active\t
+89\tREC-0003\t7/23/2026\tSandra\tArch Forum\t2.57E+11\tCommercial\tAluminium Windows & Doors\tNTINDA\tPending\tPending\t141000000\t0\t141000000\tProspect\tN/A - Won/Active\t
+108\tREC-0022\t7/22/2026\tAnna\tMadam winnie\t2.57E+11\tResidential\tAluminium Windows & Doors\tWAKISO\tNot Ready\tPending\t0\t0\t0\tProspect\tN/A - Won/Active\t
+88\tREC-0002\t7/22/2026\tSandra\tZephyr Balunywa\t2.57E+11\tCommercial\tAluminium Windows & Doors\tBUSEMBATIA\tNot Ready\tTaken\t2830000\t2830000\t0\tSuccess (Order Won)\tN/A - Won/Active\t8/14/2026
+107\tREC-0021\t7/21/2026\tAnna\tMr.Smith\t2.57E+12\tResidential\tAluminium Windows & Doors\tWAKISO\tNot Ready\tPending\t0\t0\t0\tProspect\tN/A - Won/Active\t
+106\tREC-0020\t7/21/2026\tAnna\tMr.frank\t2.57E+11\tCommercial\tAluminium Windows & Doors\tMBARARA\tNot Ready\tPending\t0\t0\t0\tProspect\tN/A - Won/Active\t
+87\tREC-0001\t7/21/2026\tSandra\tMirondo Fred\t750142995\tInstitutional\tOffice Partitions\tJINJA\tNot Ready\tPending\t58546260\t58546260\t0\tSuccess (Order Won)\tN/A - Won/Active\t8/8/2026
+105\tREC-0019\t7/20/2026\tAnna\tMadam Mutoni\t2.57E+11\tResidential\tAluminium Windows & Doors\tWakiso\tNot Ready\tPending\t0\t0\t0\tProspect\tN/A - Won/Active\t
+104\tREC-0018\t7/20/2026\tAnna\tMr.Mugisha Amujjade\t2.57E+11\tResidential\tAluminium Windows & Doors\tKISOZI\tNot Ready\tPending\t0\t0\t0\tProspect\tN/A - Won/Active\t
+147\tCAL-2026-5430\t7/17/2026\tSandra\tMr. Fred Mirondo\t2.57E+11\tInstitutional\tAluminium Windows & Doors\tJINJA\tSite Ready\tPending\t79126350.31\t0\t79126350.31\tProspect\tN/A - Won/Active\t8/18/2026
+146\tCAL-2026-5421\t7/17/2026\tSandra\tMr. Mirondo fred\t2.57E+11\tInstitutional\tOffice Partitions\tJinja\tNot Ready\tPending\t79126350.31\t0\t79126350.31\tProspect\tN/A - Won/Active\t8/18/2026
+148\tCAL-2026-2925\t7/16/2026\tSandra\tMrs. Zephyr Balunywa\t2.57E+11\tCommercial\tAluminium Windows & Doors\tBusembatia\tNot Ready\tTaken\t2500000\t0\t2500000\tProspect\tN/A - Won/Active\t8/18/2026
+150\tCAL-2026-0953\t7/13/2026\tSandra\tMr. Andrew Mara\t2.57E+11\tResidential\tAluminium Windows & Doors\tLuweero\tNot Ready\tPending\t42909976.2\t0\t42909976.2\tProspect\tN/A - Won/Active\t8/18/2026
+149\tCAL-2026-2029\t7/13/2026\tSandra\tMr. Kiiza Nelson\t2.57E+11\tResidential\tAluminium Windows & Doors\tAkright\tSite Ready\tTaken\t46488050\t0\t46488050\tProspect\tN/A - Won/Active\t8/12/2026
+151\tCAL-2026-4355\t7/4/2026\tSandra\tMR.KASUMBA\t2.57E+11\tResidential\tAluminium Windows & Doors\tMawokota\tNot Ready\tPending\t16027521.27\t0\t16027521.27\tProspect\tN/A - Won/Active\t8/18/2026
+152\tCAL-2026-2336\t6/30/2026\tSandra\tOpus Design\t2.57E+11\tCommercial\tSteel Fabrication\tBulenga\tNot Ready\tPending\t21584600\t0\t21584600\tProspect\tN/A - Won/Active\t8/18/2026"""
 
-def get_connection():
-    """Returns a connection object to the SQLite database."""
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+df = pd.read_csv(io.StringIO(csv_data), sep='\t')
 
-def seed_master_configurations():
-    """Seeds the initial team roster and master dropdown options into the database."""
-    conn = get_connection()
-    cursor = conn.cursor()
+conn = sqlite3.connect("casements_mis.db")
+cursor = conn.cursor()
+cursor.execute("PRAGMA foreign_keys = ON;")
 
-    # 1. Team Members & Roles
-    team_members = [
-        ("Sandra", "Sales Executive"),
-        ("Doreen", "Sales Executive"),
-        ("General Manager", "Sales Executive"),
-        ("Anna", "Sales Executive")
-    ]
-    for name, role in team_members:
-        cursor.execute("""
-            INSERT INTO users (full_name, role) 
-            SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM users WHERE full_name = ?)
-        """, (name, role, name))
+# 1. Create tables
+cursor.executescript("""
+CREATE TABLE IF NOT EXISTS users (
+    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_name TEXT NOT NULL,
+    email TEXT UNIQUE,
+    role TEXT NOT NULL
+);
 
-    # 2. Category Values Mapping
-    settings_data = {
-        "project_type": ["Residential", "Commercial", "Industrial", "Institutional"],
-        "scope_of_work": [
-            "Aluminium Windows & Doors", "Sliding Doors", "Curtain Walls", 
-            "Toughened Glass", "Office Partitions", "Steel Fabrication", "Unipot"
-        ],
-        "site_status": ["Not Ready", "Site Ready", "In Progress", "Completed"],
-        "measurement_status": ["Pending", "Taken", "Approved"],
-        "deal_status": [
-            "Prospect", "Qualified Lead", "Site Visit", 
-            "Quotation Issued", "Negotiation", "Success (Order Won)", "Closed Lost"
-        ],
-        "reason_for_loss": [
-            "N/A - Won/Active", "Quotation Expensive", 
-            "Bad Reputation", "Taken by Competitor", "On Hold"
-        ],
-        "market_segment": [
-            "Individual Clients", "Contractors", "Architects", 
-            "Engineers", "Developers", "Consultants", "Institutions"
-        ]
-    }
+CREATE TABLE IF NOT EXISTS clients (
+    client_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_name TEXT NOT NULL,
+    phone TEXT,
+    district TEXT
+);
 
-    # 3. Insert configurations if they don't already exist
-    for category, items in settings_data.items():
-        for item in items:
-            cursor.execute("""
-                INSERT INTO system_settings (category, item_value)
-                SELECT ?, ? WHERE NOT EXISTS (
-                    SELECT 1 FROM system_settings WHERE category = ? AND item_value = ?
-                )
-            """, (category, item, category, item))
+CREATE TABLE IF NOT EXISTS opportunities (
+    opportunity_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_code TEXT UNIQUE,
+    date_entered DATE NOT NULL,
+    sales_executive_id INTEGER NOT NULL,
+    client_id INTEGER NOT NULL,
+    project_type TEXT,
+    scope_of_work TEXT NOT NULL,
+    site_location TEXT,
+    site_status TEXT DEFAULT 'Pending',
+    measurement_status TEXT DEFAULT 'Pending',
+    quotation_amount REAL DEFAULT 0.0,
+    amount_paid REAL DEFAULT 0.0,
+    deal_status TEXT DEFAULT 'Pipeline',
+    reason_for_loss TEXT DEFAULT 'N/A - Won/Active',
+    next_followup_date DATE,
+    FOREIGN KEY (sales_executive_id) REFERENCES users(user_id),
+    FOREIGN KEY (client_id) REFERENCES clients(client_id)
+);
+""")
 
-    conn.commit()
-    conn.close()
+# 2. Seed Users
+users = [('Anna', 'anna@casements.co.ug', 'Sales Executive'),
+         ('Sandra', 'sandra@casements.co.ug', 'Sales Executive'),
+         ('Joseph', 'joseph@casements.co.ug', 'Sales Executive'),
+         ('Doreen', 'doreen@casements.co.ug', 'Sales Executive')]
 
-def init_db():
-    """Initializes all required database tables if they do not exist."""
-    conn = get_connection()
-    cursor = conn.cursor()
+cursor.executemany("INSERT OR IGNORE INTO users (full_name, email, role) VALUES (?, ?, ?);", users)
+conn.commit()
+
+# 3. Insert Unique Clients
+clients_df = df[['Client Name', 'Contact Number', 'Location']].drop_duplicates(subset=['Client Name'])
+for _, row in clients_df.iterrows():
+    name = str(row['Client Name']).strip().upper()
+    phone = str(row['Contact Number']) if pd.notna(row['Contact Number']) else None
+    district = str(row['Location']) if pd.notna(row['Location']) else None
+    cursor.execute("""
+        INSERT INTO clients (company_name, phone, district) 
+        VALUES (?, ?, ?);
+    """, (name, phone, district))
+conn.commit()
+
+# 4. Insert Opportunities with foreign key mappings
+user_map = {row[1].lower(): row[0] for row in cursor.execute("SELECT user_id, full_name FROM users;").fetchall()}
+client_map = {row[1]: row[0] for row in cursor.execute("SELECT client_id, company_name FROM clients;").fetchall()}
+
+for _, row in df.iterrows():
+    sales_exec = str(row['Sales Exec']).strip().lower()
+    client_name = str(row['Client Name']).strip().upper()
     
-    # 1. Users Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name TEXT NOT NULL,
-        email TEXT UNIQUE,
-        role TEXT NOT NULL CHECK(role IN ('Sales Executive', 'Sales Manager', 'General Manager', 'Managing Director', 'Admin')),
-        is_active INTEGER DEFAULT 1,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    """)
+    user_id = user_map.get(sales_exec, 1)
+    client_id = client_map.get(client_name)
+    
+    if not client_id:
+        continue
 
-    # 2. Clients Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS clients (
-        client_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        company_name TEXT NOT NULL,
-        contact_person TEXT,
-        phone TEXT,
-        email TEXT,
-        district TEXT,
-        region TEXT,
-        market_segment TEXT
-    );
-    """)
-
-    # 3. Dynamic System Settings Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS system_settings (
-        setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        category TEXT NOT NULL,
-        item_value TEXT NOT NULL,
-        is_active INTEGER DEFAULT 1
-    );
-    """)
-
-    # 4. Opportunities Master Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS opportunities (
-        opportunity_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        record_code TEXT UNIQUE,
-        date_entered DATE NOT NULL,
-        sales_executive_id INTEGER NOT NULL,
-        client_id INTEGER NOT NULL,
-        project_type TEXT,
-        scope_of_work TEXT NOT NULL,
-        site_location TEXT,
-        site_status TEXT DEFAULT 'Pending',
-        measurement_status TEXT DEFAULT 'Pending',
-        quotation_amount REAL DEFAULT 0.0,
-        amount_paid REAL DEFAULT 0.0,
-        deal_status TEXT DEFAULT 'Pipeline',
-        reason_for_loss TEXT DEFAULT 'N/A - Won/Active',
-        next_followup_date DATE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (sales_executive_id) REFERENCES users(user_id),
-        FOREIGN KEY (client_id) REFERENCES clients(client_id)
-    );
-    """)
-
-    # 5. Daily Activity Logs Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS daily_activity_logs (
-        log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        log_date DATE NOT NULL,
-        sales_executive_id INTEGER NOT NULL,
-        new_companies_visited INTEGER DEFAULT 0,
-        telephone_calls INTEGER DEFAULT 0,
-        emails_sent INTEGER DEFAULT 0,
-        meetings_held INTEGER DEFAULT 0,
-        new_leads_generated INTEGER DEFAULT 0,
-        daily_challenges TEXT,
-        management_support_needed TEXT,
-        remarks TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (sales_executive_id) REFERENCES users(user_id)
-    );
-    """)
-
-    # 6. Competitor Pricing Intelligence Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS competitor_intelligence (
-        intel_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        competitor_name TEXT NOT NULL,
-        product_scope TEXT NOT NULL,
-        estimated_sqm_rate REAL DEFAULT 0.0,
-        win_rate_impact TEXT,
-        perceived_quality TEXT,
-        notes TEXT,
-        recorded_date DATE DEFAULT CURRENT_DATE
-    );
-    """)
-
-    # 7. Customer Sentiment & Feedback Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS customer_feedback (
-        feedback_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        client_id INTEGER,
-        satisfaction_score INTEGER CHECK(satisfaction_score BETWEEN 1 AND 5),
-        pricing_perception TEXT,
-        quality_rating TEXT,
-        feedback_comments TEXT,
-        feedback_date DATE DEFAULT CURRENT_DATE,
-        FOREIGN KEY (client_id) REFERENCES clients(client_id)
-    );
-    """)
-
-    # 8. PRO Monthly KPI Tracking Table
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS pro_kpi_logs (
-        log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        log_month TEXT NOT NULL,
-        pr_campaigns INTEGER DEFAULT 0,
-        press_releases INTEGER DEFAULT 0,
-        project_showcases INTEGER DEFAULT 0,
-        testimonials_obtained INTEGER DEFAULT 0,
-        brand_compliance_pct REAL DEFAULT 100.0,
-        reputation_issues_resolved_pct REAL DEFAULT 100.0,
-        tiktok_posts INTEGER DEFAULT 0,
-        tiktok_views INTEGER DEFAULT 0,
-        facebook_posts INTEGER DEFAULT 0,
-        facebook_engagement INTEGER DEFAULT 0,
-        instagram_posts INTEGER DEFAULT 0,
-        instagram_follower_growth INTEGER DEFAULT 0,
-        linkedin_posts INTEGER DEFAULT 0,
-        x_posts INTEGER DEFAULT 0,
-        x_impressions INTEGER DEFAULT 0,
-        x_engagement_rate REAL DEFAULT 0.0,
-        x_followers_growth INTEGER DEFAULT 0,
-        website_updates INTEGER DEFAULT 0,
-        website_visitors INTEGER DEFAULT 0,
-        whatsapp_enquiries INTEGER DEFAULT 0,
-        csat_rating REAL DEFAULT 95.0,
-        complaints_resolved_pct REAL DEFAULT 100.0,
-        recorded_date DATE DEFAULT CURRENT_DATE
-    );
-    """)
-
-    conn.commit()
-    conn.close()
-
-    # Seed team roster and settings
-    seed_master_configurations()
-
-def parse_date(date_str):
-    if not date_str or str(date_str).strip() == "":
-        return None
-    date_str = str(date_str).strip()
-    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y"):
+    def clean_float(val):
         try:
-            return dt.strptime(date_str, fmt).strftime("%Y-%m-%d")
-        except ValueError:
-            pass
-    return None
+            return float(val)
+        except:
+            return 0.0
 
-def clean_num(val):
-    if not val:
-        return 0
-    val_str = str(val).lower().replace("ugx", "").replace("usd", "").replace(",", "").strip()
-    try:
-        return float(val_str)
-    except ValueError:
-        return 0
+    cursor.execute("""
+        INSERT OR IGNORE INTO opportunities (
+            record_code, date_entered, sales_executive_id, client_id, 
+            project_type, scope_of_work, site_location, site_status, 
+            measurement_status, quotation_amount, amount_paid, 
+            deal_status, reason_for_loss, next_followup_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    """, (
+        str(row['Code']),
+        str(row['Date']),
+        user_id,
+        client_id,
+        str(row['Project']),
+        str(row['Scope']),
+        str(row['Location']) if pd.notna(row['Location']) else None,
+        str(row['Site Status']) if pd.notna(row['Site Status']) else 'Pending',
+        str(row['Meas. Status']) if pd.notna(row['Meas. Status']) else 'Pending',
+        clean_float(row['Quotation (UGX)']),
+        clean_float(row['Paid (UGX)']),
+        str(row['Deal Status']),
+        str(row['Reason for Loss']) if pd.notna(row['Reason for Loss']) else 'N/A - Won/Active',
+        str(row['Next Follow-Up']) if pd.notna(row['Next Follow-Up']) and str(row['Next Follow-Up']).strip() != '' else None
+    ))
 
-def upload_raw_dataset():
-    raw_records = [
-        ("7/21/2026", "Sandra", "Mirondo Fred", "750142995", "Institutional", "Office Partitions", "JINJA", "Not Ready", "Pending", "58546260", "58546260", "0", "Success (Order Won)", "N/A - Won/Active", "2026-08-08"),
-        ("7/22/2026", "Sandra", "Zephyr Balunywa", "256776610176", "Commercial", "Aluminium Windows & Doors", "BUSEMBATIA", "", "Taken", "2550000", "0", "2550000", "Prospect", "", ""),
-        ("7/23/2026", "Sandra", "Arch Forum", "256776690915", "Commercial", "Aluminium Windows & Doors", "NTINDA", "", "", "141000000", "0", "141000000", "Prospect", "", ""),
-        ("7/24/2026", "Sandra", "Arch Forum", "256776690915", "Commercial", "Aluminium Windows & Doors", "NTINDA", "", "", "311437363", "0", "311437363", "Prospect", "", ""),
-        ("7/25/2026", "Sandra", "Madam Yudaya", "256772650938", "Residential", "Aluminium Windows & Doors", "KIRA-NSASA", "", "", "132032328", "0", "132032328", "Prospect", "", ""),
-        ("7/26/2026", "Sandra", "Andrew Amara", "256752282505", "Commercial", "Aluminium Windows & Doors", "LUWEERO", "", "", "42909976", "0", "42909976", "Prospect", "", ""),
-        ("7/27/2026", "Sandra", "Dr. Ndawula David", "256772409023", "Residential", "Steel Fabrication", "GAYAZA", "", "", "4511351", "0", "4511351", "Prospect", "", ""),
-        ("7/28/2026", "Sandra", "Mr. Edgar", "256706078772", "Residential", "Aluminium Windows & Doors", "NAGURU", "", "", "8500000", "0", "8500000", "Prospect", "", ""),
-        ("7/29/2026", "Sandra", "Mr. Esami", "256702720808", "Commercial", "Toughened Glass", "WANDEGAYA", "", "", "2585000", "0", "2585000", "Prospect", "", ""),
-        ("7/30/2026", "Sandra", "Opus Design", "256706690312", "Industrial", "Steel Fabrication", "BULENGA", "", "", "21586600", "0", "21586600", "Prospect", "", ""),
-        ("7/31/2026", "Sandra", "Mr. Oguttu Wilber", "256784261089", "Residential", "Aluminium Windows & Doors", "BUSIA", "", "", "130000000", "0", "130000000", "Prospect", "", ""),
-        ("8/1/2026", "Sandra", "Ibero Coffee", "27836673818", "Industrial", "Aluminium Windows & Doors", "NAMANVE", "Not Ready", "", "135947576", "0", "135947576", "Prospect", "", ""),
-        ("8/2/2026", "Sandra", "Ibero Coffee", "27836673818", "Industrial", "Aluminium Windows & Doors", "NAMANVE", "Not Ready", "", "166095651", "0", "166095651", "Prospect", "", ""),
-        ("8/3/2026", "Sandra", "Ibero Coffee", "27836673818", "Industrial", "Curtain Walls", "NAMANVE", "Not Ready", "", "556393600", "0", "556393600", "Prospect", "", ""),
-        ("8/4/2026", "Sandra", "Ibero Coffee", "27836673818", "Industrial", "Aluminium Windows & Doors", "NAMANVE", "Not Ready", "", "55518467", "0", "55518467", "Prospect", "", ""),
-        ("8/5/2026", "Sandra", "Ibero Coffee", "27836673818", "Industrial", "Steel Fabrication", "NAMANVE", "Not Ready", "", "46020000", "0", "46020000", "Prospect", "", ""),
-        ("8/6/2026", "Sandra", "Ibero Coffee", "27836673818", "Industrial", "Steel Fabrication", "NAMANVE", "Not Ready", "", "44657808", "0", "44657808", "Prospect", "", ""),
-        ("20/7/2026", "Anna", "Mr.Mugisha Amujjade", "256787476267", "Residential", "Aluminium Windows & Doors", "KISOZI", "Not Ready", "", "0", "0", "0", "Prospect", "", ""),
-        ("20/7/2026", "Anna", "Madam Mutoni", "256786791714", "Residential", "Aluminium Windows & Doors", "Wakiso", "Not Ready", "", "0", "0", "0", "Prospect", "", ""),
-        ("21/7/2026", "Anna", "Mr.frank", "256749795811", "Commercial", "Aluminium Windows & Doors", "MBARARA", "Not Ready", "", "0", "0", "0", "Prospect", "", ""),
-        ("21/7/2026", "Anna", "Mr.Smith", "2567750000875", "Residential", "Aluminium Windows & Doors", "WAKISO", "Not Ready", "", "0", "0", "0", "Prospect", "", ""),
-        ("22/7/2026", "Anna", "Madam winnie", "256771915697", "Residential", "Aluminium Windows & Doors", "WAKISO", "Not Ready", "", "0", "0", "0", "Prospect", "", ""),
-        ("23/7/2026", "Anna", "Mr joel", "256705713353", "Residential", "Steel Fabrication", "WAKISO", "Not Ready", "", "0", "0", "0", "Prospect", "", ""),
-        ("23/7/2026", "Anna", "QUISA Constructions", "256751458275", "Residential", "Aluminium Windows & Doors", "MBARARA", "Not Ready", "", "0", "0", "0", "Prospect", "", ""),
-        ("23/7/2026", "Anna", "Mr.Erisa", "256752888424", "Residential", "Aluminium Windows & Doors", "MBARARA", "Not Ready", "", "0", "0", "0", "Prospect", "", ""),
-        ("23/7/2026", "Anna", "Mr.ODOI", "256782612306", "Residential", "Aluminium Windows & Doors", "JINJA", "Not Ready", "", "0", "0", "0", "Prospect", "", ""),
-        ("23/7/2026", "Anna", "Mr.Edward", "256772381212", "Residential", "Aluminium Windows & Doors", "NASANA", "Not Ready", "", "0", "0", "0", "Prospect", "", ""),
-        ("23/7/2026", "Anna", "Mr.Caleb", "2567778880985", "Residential", "Aluminium Windows & Doors", "JINJA", "Not Ready", "", "0", "0", "0", "Prospect", "", ""),
-        ("29/7/2026", "Doreen", "SBC UGANDA", "", "Industrial", "STAINLESS MIRROR", "AIRPORT", "Site Ready", "Taken", "19488585", "11561025", "7927560", "Success (Order Won)", "N/A - Won/Active", ""),
-        ("29/7/2026", "Doreen", "PONNI SAFARI CAMPS", "", "Institutional", "Unipot", "KARAMOJA", "In Progress", "Taken", "18354000", "18354000", "0", "Success (Order Won)", "N/A - Won/Active", ""),
-        ("29/7/2026", "Doreen", "VIROGO", "", "Residential", "Aluminium Windows & Doors", "MITYANA", "Site Ready", "Taken", "3160891", "3160891", "0", "Success (Order Won)", "N/A - Won/Active", ""),
-        ("29/7/2026", "Doreen", "3D SERVICE", "", "Residential", "Sliding Doors", "BUNGA", "Site Ready", "Taken", "12140999", "9800000", "2340999", "Success (Order Won)", "N/A - Won/Active", ""),
-        ("29/7/2026", "Doreen", "ASILI AGRICULTURAL", "766101562", "Institutional", "UNIPORTS", "In Progress", "Taken", "31813600", "0", "31813600", "Prospect", "", "29/7/2027"),
-        ("29/7/2026", "Doreen", "MR ISA", "702436427", "Residential", "Aluminium Windows & Doors", "NAKIGALALA", "Site Ready", "Taken", "22925374", "0", "22925374", "Prospect", "", ""),
-        ("29/7/2026", "Doreen", "MR DAVID", "704731766", "Residential", "Steel Fabrication", "KAJJANSI", "In Progress", "Taken", "5520000", "0", "5520000", "Quotation Issued", "", ""),
-        ("28/7/2026", "Doreen", "MY KAYUMBA", "", "Residential", "Steel Fabrication", "KIGALI", "In Progress", "Taken", "7363200", "0", "7363200", "Quotation Issued", "", ""),
-        ("23/7/2026", "Doreen", "MR CHARLES", "782517278", "Residential", "Aluminium Windows & Doors", "LUZIRA", "In Progress", "Taken", "20494430", "0", "20494430", "Prospect", "", ""),
-        ("24/7/2026", "Doreen", "MS CAROLYNE", "772313112", "Residential", "Aluminium Windows & Doors", "MUTUNDWE", "Not Ready", "Taken", "44041723", "0", "44041723", "Quotation Issued", "", ""),
-        ("2026-08-03", "Doreen", "ssimbwa", "757135031", "Residential", "Steel Fabrication", "kakiri", "Not Ready", "Taken", "9230845", "0", "9230845", "Quotation Issued", "", ""),
-        ("2026-08-03", "Doreen", "SARJAN", "700612924", "Commercial", "Aluminium Windows & Doors", "KOLOLO", "In Progress", "Pending", "124700000", "0", "124700000", "Quotation Issued", "", ""),
-        ("2026-08-01", "Doreen", "EXCEL CONSTRUCTION", "emma@excelconstruction.org", "Commercial", "Aluminium Windows & Doors", "KOLOLO", "In Progress", "Pending", "2980582289", "0", "2980582289", "Quotation Issued", "", ""),
-        ("2026-08-03", "Doreen", "L.A LIVING SPACE", "", "Residential", "Aluminium Windows & Doors", "KUNGU", "Site Ready", "Approved", "83000000", "35000000", "48000000", "Success (Order Won)", "N/A - Won/Active", ""),
-        ("2026-08-01", "Doreen", "BRENDAH", "772477200", "Residential", "SHOWER CABINS", "KIGO", "Site Ready", "Taken", "15847400", "0", "15847400", "Quotation Issued", "", "")
-    ]
+conn.commit()
+conn.close()
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA foreign_keys = ON;")
-
-    # Clear existing opportunities to avoid duplication on re-run
-    cursor.execute("DELETE FROM opportunities;")
-
-    inserted_count = 0
-    for idx, rec in enumerate(raw_records, start=1):
-        rec_list = list(rec) + [""] * (15 - len(rec))
-        d_entered, sales_person, client_name, contact, proj_type, scope, location, site_stat, meas_stat, q_amt, paid_amt, out_bal, deal_stat, loss_reason, followup_date = rec_list[:15]
-
-        cursor.execute("SELECT user_id FROM users WHERE full_name = ?", (sales_person,))
-        user_row = cursor.fetchone()
-        if not user_row:
-            cursor.execute("INSERT INTO users (full_name, role) VALUES (?, 'Sales Executive')", (sales_person,))
-            sales_id = cursor.lastrowid
-        else:
-            sales_id = user_row[0]
-
-        cursor.execute("SELECT client_id FROM clients WHERE company_name = ?", (client_name,))
-        client_row = cursor.fetchone()
-        if not client_row:
-            cursor.execute("INSERT INTO clients (company_name, phone) VALUES (?, ?)", (client_name, str(contact)))
-            client_id = cursor.lastrowid
-        else:
-            client_id = client_row[0]
-
-        formatted_date = parse_date(d_entered) or "2026-08-01"
-        formatted_followup = parse_date(followup_date)
-        quotation_val = clean_num(q_amt)
-        paid_val = clean_num(paid_amt)
-        code = f"REC-{idx:04d}"
-
-        cursor.execute("""
-            INSERT INTO opportunities (
-                record_code, date_entered, sales_executive_id, client_id,
-                project_type, scope_of_work, site_location, site_status,
-                measurement_status, quotation_amount, amount_paid,
-                deal_status, reason_for_loss, next_followup_date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            code, formatted_date, sales_id, client_id,
-            proj_type, scope, location, site_stat or "Pending",
-            meas_stat or "Pending", quotation_val, paid_val,
-            deal_stat or "Prospect", loss_reason or "N/A - Won/Active", formatted_followup
-        ))
-        inserted_count += 1
-
-    conn.commit()
-    conn.close()
-    print(f"Successfully uploaded {inserted_count} opportunity records!")
-
-def upload_daily_activity_logs():
-    daily_logs = [
-        ("27/07/2026", "Sandra", 0, 10, 1, 1, 3, "Clients complain about casements delaying their orders", "N/A", "Meeting set for tomorrow at Ibero Namanve"),
-        ("21/07/2026", "Anna", 1, 15, 0, 1, 1, "N/A", "N/A", "They asked to contact Mr. Abid directly"),
-        ("21/07/2026", "Doreen", 1, 4, 0, 2, 0, "N/A", "N/A", "Routine client follow-ups"),
-        ("23/07/2026", "Anna", 0, 2, 0, 5, 2, "Complaint about delay on delivery from clients", "N/A", "Will give me feedback before end of August"),
-        ("23/07/2026", "Sandra", 1, 2, 0, 2, 1, "N/A", "N/A", "Followed up on pipeline items"),
-        ("2026-08-03", "Doreen", 0, 1, 2, 1, 0, "N/A", "N/A", "Site visit completed")
-    ]
-
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    # Clear existing logs to avoid duplication on re-run
-    cursor.execute("DELETE FROM daily_activity_logs;")
-
-    inserted_logs = 0
-    for log in daily_logs:
-        log_date_raw, sales_person, visited, calls, emails, meetings, leads, challenges, support, remarks = log
-
-        cursor.execute("SELECT user_id FROM users WHERE full_name = ?", (sales_person,))
-        user_row = cursor.fetchone()
-        if not user_row:
-            cursor.execute("INSERT INTO users (full_name, role) VALUES (?, 'Sales Executive')", (sales_person,))
-            sales_id = cursor.lastrowid
-        else:
-            sales_id = user_row[0]
-
-        formatted_date = parse_date(log_date_raw) or "2026-08-01"
-
-        cursor.execute("""
-            INSERT INTO daily_activity_logs (
-                log_date, sales_executive_id, new_companies_visited,
-                telephone_calls, emails_sent, meetings_held,
-                new_leads_generated, daily_challenges,
-                management_support_needed, remarks
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            formatted_date, sales_id, clean_num(visited),
-            clean_num(calls), clean_num(emails), clean_num(meetings),
-            clean_num(leads), challenges, support, remarks
-        ))
-        inserted_logs += 1
-
-    conn.commit()
-    conn.close()
-    print(f"Successfully uploaded {inserted_logs} daily activity log records!")
-
-if __name__ == "__main__":
-    init_db()
-    upload_raw_dataset()
-    upload_daily_activity_logs()
+print("Migration completed successfully! All tables populated.")
