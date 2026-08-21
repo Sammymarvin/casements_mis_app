@@ -176,7 +176,6 @@ def render_master_entry():
                 if not client_name.strip():
                     st.error("Please enter a Client / Company Name before saving.")
                 else:
-                    # Get or Create Client (Fixed ? to %s)
                     existing_client = run_query("SELECT client_id FROM clients WHERE company_name = %s", (client_name.strip(),))
                     if existing_client.empty:
                         execute_commit("INSERT INTO clients (company_name, phone) VALUES (%s, %s)", (client_name.strip(), contact_number.strip()))
@@ -186,11 +185,9 @@ def render_master_entry():
                         if contact_number.strip():
                             execute_commit("UPDATE clients SET phone = %s WHERE client_id = %s", (contact_number.strip(), client_id))
                     
-                    # Get Exec ID (Fixed ? to %s)
                     user_res = run_query("SELECT user_id FROM users WHERE full_name = %s", (sales_exec,))
                     exec_id = int(user_res.iloc[0]['user_id']) if not user_res.empty else 1
 
-                    # Save Opportunity (Fixed ? to %s)
                     query_opp = """
                         INSERT INTO opportunities 
                         (record_code, date_entered, sales_executive_id, client_id, project_type, 
@@ -253,7 +250,6 @@ def render_master_entry():
 
             st.divider()
 
-            # Record Update Tool
             st.markdown("### 🔄 Comprehensive Record & Status Modifier")
             record_options = {
                 f"{row['Code']} | {row['Client Name']} ({row['Contact Number']})": row['opportunity_id']
@@ -265,7 +261,6 @@ def render_master_entry():
                 selected_id = record_options[selected_label]
                 current_rec = filtered_df[filtered_df['opportunity_id'] == selected_id].iloc[0]
 
-                # Fixed ? to %s
                 client_id_res = run_query("SELECT client_id FROM opportunities WHERE opportunity_id = %s", (selected_id,))
                 current_client_id = int(client_id_res.iloc[0]['client_id']) if not client_id_res.empty else None
 
@@ -344,18 +339,15 @@ def render_master_entry():
                     update_submitted = st.form_submit_button("🚀 Post & Commit All Updates", type="primary", use_container_width=True)
 
                     if update_submitted:
-                        # 1. Update Client Table Data (Fixed ? to %s)
                         if current_client_id:
                             execute_commit(
                                 "UPDATE clients SET company_name = %s, phone = %s WHERE client_id = %s",
                                 (upd_client_name.strip(), upd_contact_num.strip(), current_client_id)
                             )
 
-                        # 2. Map Sales Exec ID (Fixed ? to %s)
                         exec_user_res = run_query("SELECT user_id FROM users WHERE full_name = %s", (upd_sales_exec,))
                         upd_exec_id = int(exec_user_res.iloc[0]['user_id']) if not exec_user_res.empty else 1
 
-                        # 3. Post Updates to Opportunities Table (Fixed ? to %s)
                         execute_commit("""
                             UPDATE opportunities
                             SET sales_executive_id = %s, scope_of_work = %s, site_location = %s,
