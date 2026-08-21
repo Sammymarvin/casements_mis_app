@@ -4,12 +4,23 @@ import datetime
 import psycopg2
 import psycopg2.extras
 
-# Supabase PostgreSQL connection parameters
-DB_HOST = "db.kmxaxdmoxpbfklhiiuqz.supabase.co"
-DB_USER = "postgres"
+# Supabase Shared Pooler Parameters (from your dashboard)
+DB_HOST = "aws-1-eu-west-1.pooler.supabase.com"
+DB_USER = "postgres.kmxaxdmoxpbfklhiiuqz"
 DB_PASSWORD = "KU#7B6a.&McVg&P"
 DB_NAME = "postgres"
 DB_PORT = "5432"
+
+def get_connection():
+    """Establish and return a connection to the Supabase pooler."""
+    return psycopg2.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME,
+        port=DB_PORT,
+        cursor_factory=psycopg2.extras.DictCursor
+    )
 
 def get_connection():
     """Establish and return a connection to the Supabase PostgreSQL database."""
