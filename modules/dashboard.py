@@ -37,7 +37,7 @@ def render_dashboard():
                 COALESCE(SUM(CASE WHEN deal_status = 'Success (Order Won)' THEN quotation_amount ELSE 0 END), 0) as total_revenue_won,
                 COALESCE(SUM(quotation_amount - amount_paid), 0) as total_outstanding
             FROM opportunities
-            WHERE TO_CHAR(date_entered, 'YYYY-MM) = %s;
+            WHERE TO_CHAR(date_entered, 'YYYY-MM') = %s;
         """
         metrics_params = (selected_month,)
     else:
@@ -71,7 +71,6 @@ def render_dashboard():
     # ----------------------------------------------------
     st.subheader(f"🏆 Sales Executive Leaderboard ({selected_month})")
     
-    # Using a raw string without f-string formatting to avoid any % character conflict
     leaderboard_query = """
         SELECT 
             u.full_name as "Sales Executive",
