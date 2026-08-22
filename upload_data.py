@@ -1,6 +1,6 @@
-import sqlite3
-import pandas as pd
 import io
+import pandas as pd
+import psycopg2
 
 # Raw dataset
 csv_data = """opportunity_id\tCode\tDate\tSales Exec\tClient Name\tContact Number\tProject\tScope\tLocation\tSite Status\tMeas. Status\tQuotation (UGX)\tPaid (UGX)\tBalance (UGX)\tDeal Status\tReason for Loss\tNext Follow-Up
@@ -72,74 +72,59 @@ csv_data = """opportunity_id\tCode\tDate\tSales Exec\tClient Name\tContact Numbe
 151\tCAL-2026-4355\t7/4/2026\tSandra\tMR.KASUMBA\t2.57E+11\tResidential\tAluminium Windows & Doors\tMawokota\tNot Ready\tPending\t16027521.27\t0\t16027521.27\tProspect\tN/A - Won/Active\t8/18/2026
 152\tCAL-2026-2336\t6/30/2026\tSandra\tOpus Design\t2.57E+11\tCommercial\tSteel Fabrication\tBulenga\tNot Ready\tPending\t21584600\t0\t21584600\tProspect\tN/A - Won/Active\t8/18/2026"""
 
+# Load dataset into pandas and remove duplicate rows based on Code
 df = pd.read_csv(io.StringIO(csv_data), sep='\t')
+df = df.drop_duplicates(subset=['Code'])
 
-conn = sqlite3.connect("casements_mis.db")
+# Connect to Supabase PostgreSQL using your settings
+conn = psycopg2.connect(
+    host="aws-1-eu-west-1.pooler.supabase.com",
+    database="postgres",
+    user="postgres.kmxaxdmoxpbfklhiiuqz",
+    password="KU#7B6a.&McVg&P",
+    port="5432"
+)
 cursor = conn.cursor()
-cursor.execute("PRAGMA foreign_keys = ON;")
 
-# 1. Create tables
-cursor.executescript("""
-CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    full_name TEXT NOT NULL,
-    email TEXT UNIQUE,
-    role TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS clients (
-    client_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    company_name TEXT NOT NULL,
-    phone TEXT,
-    district TEXT
-);
-
-CREATE TABLE IF NOT EXISTS opportunities (
-    opportunity_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    record_code TEXT UNIQUE,
-    date_entered DATE NOT NULL,
-    sales_executive_id INTEGER NOT NULL,
-    client_id INTEGER NOT NULL,
-    project_type TEXT,
-    scope_of_work TEXT NOT NULL,
-    site_location TEXT,
-    site_status TEXT DEFAULT 'Pending',
-    measurement_status TEXT DEFAULT 'Pending',
-    quotation_amount REAL DEFAULT 0.0,
-    amount_paid REAL DEFAULT 0.0,
-    deal_status TEXT DEFAULT 'Pipeline',
-    reason_for_loss TEXT DEFAULT 'N/A - Won/Active',
-    next_followup_date DATE,
-    FOREIGN KEY (sales_executive_id) REFERENCES users(user_id),
-    FOREIGN KEY (client_id) REFERENCES clients(client_id)
-);
-""")
-
-# 2. Seed Users
-users = [('Anna', 'anna@casements.co.ug', 'Sales Executive'),
-         ('Sandra', 'sandra@casements.co.ug', 'Sales Executive'),
-         ('Joseph', 'joseph@casements.co.ug', 'Sales Executive'),
-         ('Doreen', 'doreen@casements.co.ug', 'Sales Executive')]
-
-cursor.executemany("INSERT OR IGNORE INTO users (full_name, email, role) VALUES (?, ?, ?);", users)
+# 1. Seed Users
+users = [
+    ('Anna', 'anna@casements.co.ug', 'Sales Executive'),
+    ('Sandra', 'sandra@casements.co.ug', 'Sales Executive'),
+    ('Joseph', 'joseph@casements.co.ug', 'Sales Executive'),
+    ('Doreen', 'doreen@casements.co.ug', 'Sales Executive')
+]
+for u in users:
+    cursor.execute("""
+        INSERT INTO users (full_name, email, role) 
+        VALUES (%s, %s, %s) 
+        ON CONFLICT (email) DO NOTHING;
+    """, u)
 conn.commit()
 
-# 3. Insert Unique Clients
-clients_df = df[['Client Name', 'Contact Number', 'Location']].drop_duplicates(subset=['Client Name'])
+# 2. Insert Unique Clients
+df['Clean_Client'] = df['Client Name'].astype(str).str.strip().str.upper()
+clients_df = df.drop_duplicates(subset=['Clean_Client'])
+
 for _, row in clients_df.iterrows():
-    name = str(row['Client Name']).strip().upper()
+    name = row['Clean_Client']
     phone = str(row['Contact Number']) if pd.notna(row['Contact Number']) else None
     district = str(row['Location']) if pd.notna(row['Location']) else None
+    
     cursor.execute("""
         INSERT INTO clients (company_name, phone, district) 
-        VALUES (?, ?, ?);
+        VALUES (%s, %s, %s)
+        ON CONFLICT DO NOTHING;
     """, (name, phone, district))
 conn.commit()
 
-# 4. Insert Opportunities with foreign key mappings
-user_map = {row[1].lower(): row[0] for row in cursor.execute("SELECT user_id, full_name FROM users;").fetchall()}
-client_map = {row[1]: row[0] for row in cursor.execute("SELECT client_id, company_name FROM clients;").fetchall()}
+# 3. Fetch mappings cleanly
+cursor.execute("SELECT user_id, full_name FROM users;")
+user_map = {row[1].lower(): row[0] for row in cursor.fetchall()}
 
+cursor.execute("SELECT client_id, company_name FROM clients;")
+client_map = {row[1]: row[0] for row in cursor.fetchall()}
+
+# 4. Insert Opportunities
 for _, row in df.iterrows():
     sales_exec = str(row['Sales Exec']).strip().lower()
     client_name = str(row['Client Name']).strip().upper()
@@ -157,12 +142,13 @@ for _, row in df.iterrows():
             return 0.0
 
     cursor.execute("""
-        INSERT OR IGNORE INTO opportunities (
+        INSERT INTO opportunities (
             record_code, date_entered, sales_executive_id, client_id, 
             project_type, scope_of_work, site_location, site_status, 
             measurement_status, quotation_amount, amount_paid, 
             deal_status, reason_for_loss, next_followup_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (record_code) DO NOTHING;
     """, (
         str(row['Code']),
         str(row['Date']),
@@ -181,6 +167,7 @@ for _, row in df.iterrows():
     ))
 
 conn.commit()
+cursor.close()
 conn.close()
 
-print("Migration completed successfully! All tables populated.")
+print("Data successfully cleaned, duplicates removed, and loaded into Supabase PostgreSQL!")

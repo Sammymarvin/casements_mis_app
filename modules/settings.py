@@ -36,7 +36,7 @@ def seed_default_settings():
             ("market_segment", "Institutions")
         ]
         for category, value in defaults:
-            execute_commit("INSERT INTO system_settings (category, item_value) VALUES (?, ?)", (category, value))
+            execute_commit("INSERT INTO system_settings (category, item_value) VALUES (%s, %s)", (category, value))
 
 def render_settings():
     st.header("⚙️ Settings & Master Configuration Lists")
@@ -80,10 +80,10 @@ def render_settings():
                 if submitted:
                     if full_name.strip():
                         # Check if user already exists
-                        existing = run_query("SELECT user_id FROM users WHERE full_name = ?", (full_name.strip(),))
+                        existing = run_query("SELECT user_id FROM users WHERE full_name = %s", (full_name.strip(),))
                         if existing.empty:
                             execute_commit(
-                                "INSERT INTO users (full_name, email, role) VALUES (?, ?, ?)",
+                                "INSERT INTO users (full_name, email, role) VALUES (%s, %s, %s)",
                                 (full_name.strip(), email.strip(), role)
                             )
                             st.success(f"✅ Added '{full_name}' as {role}!")
@@ -97,16 +97,33 @@ def render_settings():
             st.subheader("📋 Active Team Roster")
             users_df = run_query("""
                 SELECT 
-                    user_id AS 'ID',
-                    full_name AS 'Full Name',
-                    email AS 'Email',
-                    role AS 'Role',
-                    CASE WHEN is_active = 1 THEN '🟢 Active' ELSE '🔴 Inactive' END AS 'Status',
-                    created_at AS 'Date Added'
+                    user_id AS "ID",
+                    full_name AS "Full Name",
+                    email AS "Email",
+                    role AS "Role",
+                    CASE WHEN is_active = 1 THEN '🟢 Active' ELSE '🔴 Inactive' END AS "Status",
+                    created_at AS "Date Added"
                 FROM users 
                 ORDER BY user_id DESC
             """)
             st.dataframe(users_df, use_container_width=True, hide_index=True)
+
+            # --- DELETE USER SUBSECTION ---
+            st.markdown("### 🗑️ Remove Team Member")
+            if not users_df.empty:
+                user_options = {row["Full Name"]: row["ID"] for _, row in users_df.iterrows()}
+                selected_user_to_delete = st.selectbox("Select User to Remove", options=list(user_options.keys()))
+                
+                if st.button("❌ Delete Selected User", type="primary", use_container_width=True):
+                    target_id = user_options[selected_user_to_delete]
+                    try:
+                        execute_commit("DELETE FROM users WHERE user_id = %s", (target_id,))
+                        st.success(f"Successfully removed '{selected_user_to_delete}' from the system.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not delete user. They may have active opportunities tied to their account. Details: {e}")
+            else:
+                st.info("No active users available to remove.")
 
     # --- 2. MANAGEMENT FOR GENERAL DROPDOWN LISTS ---
     else:
@@ -121,7 +138,7 @@ def render_settings():
                 if submitted:
                     if new_item.strip():
                         execute_commit(
-                            "INSERT INTO system_settings (category, item_value) VALUES (?, ?)", 
+                            "INSERT INTO system_settings (category, item_value) VALUES (%s, %s)", 
                             (selected_cat_key, new_item.strip())
                         )
                         st.success(f"Added '{new_item}' to {selected_cat_label}!")
@@ -132,9 +149,7 @@ def render_settings():
         with col2:
             st.subheader(f"Current {selected_cat_label}")
             df = run_query(
-                "SELECT setting_id AS 'ID', item_value AS 'Value', is_active AS 'Active Status' FROM system_settings WHERE category = ?", 
+                'SELECT setting_id AS "ID", item_value AS "Value", is_active AS "Active Status" FROM system_settings WHERE category = %s', 
                 (selected_cat_key,)
             )
             st.dataframe(df, use_container_width=True, hide_index=True)
-
-           
