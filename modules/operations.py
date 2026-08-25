@@ -46,23 +46,23 @@ def render_pipeline_operations():
         ]
     )
 
-    # Fetch Base Project Data
+    # Fetch Base Project Data (PostgreSQL Compatible Double-Quote Aliases)
     query_opps = """
         SELECT 
             o.opportunity_id,
-            o.record_code AS [Code],
-            o.date_entered AS [Date],
-            u.full_name AS [Sales Exec],
-            c.company_name AS [Client],
-            o.project_type AS [Project Type],
-            o.scope_of_work AS [Scope],
-            o.site_location AS [Location],
-            o.site_status AS [Site Status],
-            o.measurement_status AS [Measurement Status],
-            o.quotation_amount AS [Quotation],
-            o.amount_paid AS [Paid],
-            o.deal_status AS [Deal Stage],
-            o.next_followup_date AS [Next Follow-up]
+            o.record_code AS "Code",
+            o.date_entered AS "Date",
+            u.full_name AS "Sales Exec",
+            c.company_name AS "Client",
+            o.project_type AS "Project Type",
+            o.scope_of_work AS "Scope",
+            o.site_location AS "Location",
+            o.site_status AS "Site Status",
+            o.measurement_status AS "Measurement Status",
+            o.quotation_amount AS "Quotation",
+            o.amount_paid AS "Paid",
+            o.deal_status AS "Deal Stage",
+            o.next_followup_date AS "Next Follow-up"
         FROM opportunities o
         LEFT JOIN users u ON o.sales_executive_id = u.user_id
         LEFT JOIN clients c ON o.client_id = c.client_id
@@ -206,10 +206,11 @@ def render_pipeline_operations():
                 submit_btn = st.form_submit_button("💾 Save Operational Status")
 
                 if submit_btn:
+                    # PostgreSQL uses %s placeholders instead of ?
                     update_sql = """
                         UPDATE opportunities
-                        SET site_status = ?, measurement_status = ?, deal_status = ?, next_followup_date = ?
-                        WHERE record_code = ?
+                        SET site_status = %s, measurement_status = %s, deal_status = %s, next_followup_date = %s
+                        WHERE record_code = %s
                     """
                     execute_commit(update_sql, (new_site_status, new_meas_status, new_deal_status, str(new_followup), record_code))
                     st.success(f"Successfully updated status for project {record_code}!")

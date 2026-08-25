@@ -38,7 +38,7 @@ def render_master_entry():
     deal_statuses = get_setting_options("deal_status")
     reasons_for_loss = get_setting_options("reason_for_loss")
 
-    # Raw Query for Opportunities (Includes Client Phone Number)
+    # Raw Query for Opportunities (Includes Client Phone Number) - Fixed with double quotes for PostgreSQL
     query_all = """
         SELECT 
             o.opportunity_id,

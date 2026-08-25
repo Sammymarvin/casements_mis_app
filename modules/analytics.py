@@ -65,10 +65,10 @@ def render_analytics():
     )
 
     # ----------------------------------------------------
-    # MONTH FILTER CONTROL
+    # MONTH FILTER CONTROL (PostgreSQL Compatible)
     # ----------------------------------------------------
     months_query = """
-        SELECT DISTINCT strftime('%Y-%m', date_entered) as month_val 
+        SELECT DISTINCT TO_CHAR(date_entered, 'YYYY-MM') as month_val 
         FROM opportunities 
         WHERE date_entered IS NOT NULL
         ORDER BY month_val DESC;
@@ -98,24 +98,24 @@ def render_analytics():
     where_opps = ""
     params_opps = []
     if selected_month != "All Time":
-        where_opps = "WHERE strftime('%Y-%m', o.date_entered) = ?"
+        where_opps = "WHERE TO_CHAR(o.date_entered, 'YYYY-MM') = %s"
         params_opps = [selected_month]
 
-    # Query Base Opportunities Data
+    # Query Base Opportunities Data (Quoted PostgreSQL Column Names)
     query_opps = f"""
         SELECT 
             o.opportunity_id,
-            o.record_code AS [Code],
-            o.date_entered AS [Date],
-            u.full_name AS [Sales Exec],
-            c.company_name AS [Client],
-            o.project_type AS [Project Type],
-            o.scope_of_work AS [Scope],
-            o.quotation_amount AS [Quotation],
-            o.amount_paid AS [Paid],
-            (o.quotation_amount - o.amount_paid) AS [Balance],
-            o.deal_status AS [Status],
-            o.reason_for_loss AS [Reason for Loss]
+            o.record_code AS "Code",
+            o.date_entered AS "Date",
+            u.full_name AS "Sales_Exec",
+            c.company_name AS "Client",
+            o.project_type AS "Project_Type",
+            o.scope_of_work AS "Scope",
+            o.quotation_amount AS "Quotation",
+            o.amount_paid AS "Paid",
+            (o.quotation_amount - o.amount_paid) AS "Balance",
+            o.deal_status AS "Status",
+            o.reason_for_loss AS "Reason_for_Loss"
         FROM opportunities o
         LEFT JOIN users u ON o.sales_executive_id = u.user_id
         LEFT JOIN clients c ON o.client_id = c.client_id
@@ -127,16 +127,31 @@ def render_analytics():
         st.info(f"No sales records available for '{selected_month}'.")
         return
 
+    # Fail-safe: Map capitalized keys cleanly regardless of driver case-folding
+    column_mapping = {col.lower(): col for col in df.columns}
+    
+    def get_col(name):
+        return df[column_mapping.get(name.lower(), name)]
+
     # Clean numerical values
-    df['Quotation'] = df['Quotation'].fillna(0.0).astype(float)
-    df['Paid'] = df['Paid'].fillna(0.0).astype(float)
-    df['Balance'] = df['Balance'].fillna(0.0).astype(float)
+    quotation_col = column_mapping.get('quotation', 'Quotation')
+    paid_col = column_mapping.get('paid', 'Paid')
+    balance_col = column_mapping.get('balance', 'Balance')
+    status_col = column_mapping.get('status', 'Status')
+    sales_exec_col = column_mapping.get('sales_exec', 'Sales_Exec')
+    reason_col = column_mapping.get('reason_for_loss', 'Reason_for_Loss')
+    project_type_col = column_mapping.get('project_type', 'Project_Type')
+    scope_col = column_mapping.get('scope', 'Scope')
+
+    df[quotation_col] = df[quotation_col].fillna(0.0).astype(float)
+    df[paid_col] = df[paid_col].fillna(0.0).astype(float)
+    df[balance_col] = df[balance_col].fillna(0.0).astype(float)
 
     # Key Aggregated Metrics
-    total_pipeline_val = df['Quotation'].sum()
-    total_revenue_collected = df['Paid'].sum()
+    total_pipeline_val = df[quotation_col].sum()
+    total_revenue_collected = df[paid_col].sum()
     total_quotations_issued = len(df)
-    orders_won = len(df[df['Status'] == 'Success (Order Won)'])
+    orders_won = len(df[df[status_col] == 'Success (Order Won)'])
     conversion_rate = (orders_won / total_quotations_issued * 100) if total_quotations_issued > 0 else 0.0
     collection_rate = (total_revenue_collected / total_pipeline_val * 100) if total_pipeline_val > 0 else 0.0
 
@@ -225,21 +240,21 @@ def render_analytics():
         where_logs = ""
         params_logs = []
         if selected_month != "All Time":
-            where_logs = "WHERE strftime('%Y-%m', dal.log_date) = ?"
+            where_logs = "WHERE TO_CHAR(dal.log_date, 'YYYY-MM') = %s"
             params_logs = [selected_month]
 
         query_logs = f"""
             SELECT 
-                dal.log_date AS [Date],
-                u.full_name AS [Sales Exec],
-                dal.new_companies_visited AS [Companies Visited],
-                dal.telephone_calls AS [Calls Made],
-                dal.emails_sent AS [Emails Sent],
-                dal.meetings_held AS [Meetings Held],
-                dal.new_leads_generated AS [New Leads],
-                dal.daily_challenges AS [Challenges],
-                dal.management_support_needed AS [Mgmt Support],
-                dal.remarks AS [Remarks]
+                dal.log_date AS "Date",
+                u.full_name AS "Sales_Exec",
+                dal.new_companies_visited AS "Companies_Visited",
+                dal.telephone_calls AS "Calls_Made",
+                dal.emails_sent AS "Emails_Sent",
+                dal.meetings_held AS "Meetings_Held",
+                dal.new_leads_generated AS "New_Leads",
+                dal.daily_challenges AS "Challenges",
+                dal.management_support_needed AS "Mgmt_Support",
+                dal.remarks AS "Remarks"
             FROM daily_activity_logs dal
             LEFT JOIN users u ON dal.sales_executive_id = u.user_id
             {where_logs}
@@ -253,36 +268,44 @@ def render_analytics():
         if df_logs.empty:
             st.info(f"No daily activity log records found for '{selected_month}'.")
         else:
+            log_cols = {c.lower(): c for c in df_logs.columns}
+            c_visited = log_cols.get('companies_visited', 'Companies_Visited')
+            c_calls = log_cols.get('calls_made', 'Calls_Made')
+            c_emails = log_cols.get('emails_sent', 'Emails_Sent')
+            c_meetings = log_cols.get('meetings_held', 'Meetings_Held')
+            c_leads = log_cols.get('new_leads', 'New_Leads')
+            c_exec = log_cols.get('sales_exec', 'Sales_Exec')
+
             c_a, c_b, c_c, c_d = st.columns(4)
             with c_a:
-                render_metric_card("Telephone Calls", f"{df_logs['Calls Made'].sum():,.0f}", "Target: 20 / Exec / Day", "#2563EB", "📞")
+                render_metric_card("Telephone Calls", f"{df_logs[c_calls].sum():,.0f}", "Target: 20 / Exec / Day", "#2563EB", "📞")
             with c_b:
-                render_metric_card("Companies Visited", f"{df_logs['Companies Visited'].sum():,.0f}", "Target: 5 / Exec / Day", "#059669", "🏢")
+                render_metric_card("Companies Visited", f"{df_logs[c_visited].sum():,.0f}", "Target: 5 / Exec / Day", "#059669", "🏢")
             with c_c:
-                render_metric_card("Meetings Held", f"{df_logs['Meetings Held'].sum():,.0f}", "Target: 3 / Exec / Day", "#7C3AED", "🤝")
+                render_metric_card("Meetings Held", f"{df_logs[c_meetings].sum():,.0f}", "Target: 3 / Exec / Day", "#7C3AED", "🤝")
             with c_d:
-                render_metric_card("New Leads", f"{df_logs['New Leads'].sum():,.0f}", "Target: 5 / Exec / Day", "#D97706", "⚡")
+                render_metric_card("New Leads", f"{df_logs[c_leads].sum():,.0f}", "Target: 5 / Exec / Day", "#D97706", "⚡")
 
             st.divider()
 
             st.markdown("#### 👤 Daily Activity Totals by Sales Executive")
-            exec_logs = df_logs.groupby('Sales Exec').agg({
-                'Companies Visited': 'sum',
-                'Calls Made': 'sum',
-                'Emails Sent': 'sum',
-                'Meetings Held': 'sum',
-                'New Leads': 'sum'
+            exec_logs = df_logs.groupby(c_exec).agg({
+                c_visited: 'sum',
+                c_calls: 'sum',
+                c_emails: 'sum',
+                c_meetings: 'sum',
+                c_leads: 'sum'
             }).reset_index()
 
             st.dataframe(exec_logs, use_container_width=True, hide_index=True)
 
             st.divider()
             st.markdown("#### 📊 Activity Comparison across Team")
-            st.bar_chart(exec_logs.set_index('Sales Exec')[['Calls Made', 'Companies Visited', 'Meetings Held', 'New Leads']])
+            st.bar_chart(exec_logs.set_index(c_exec)[[c_calls, c_visited, c_meetings, c_leads]])
 
             with st.expander("💬 View Daily Field Challenges & Management Support Notes"):
                 st.dataframe(
-                    df_logs[['Date', 'Sales Exec', 'Challenges', 'Mgmt Support', 'Remarks']], 
+                    df_logs, 
                     use_container_width=True,
                     hide_index=True
                 )
@@ -293,12 +316,12 @@ def render_analytics():
     elif menu == "🏆 Sales Executive Leaderboard":
         st.markdown(f"### 🏆 Executive Sales Performance Dashboard ({selected_month})")
 
-        exec_summary = df.groupby('Sales Exec').agg(
-            Quotations=('opportunity_id', 'count'),
-            Orders_Won=('Status', lambda x: (x == 'Success (Order Won)').sum()),
-            Total_Quoted=('Quotation', 'sum'),
-            Total_Collected=('Paid', 'sum'),
-            Outstanding_Balance=('Balance', 'sum')
+        exec_summary = df.groupby(sales_exec_col).agg(
+            Quotations=(column_mapping.get('opportunity_id', 'opportunity_id'), 'count'),
+            Orders_Won=(status_col, lambda x: (x == 'Success (Order Won)').sum()),
+            Total_Quoted=(quotation_col, 'sum'),
+            Total_Collected=(paid_col, 'sum'),
+            Outstanding_Balance=(balance_col, 'sum')
         ).reset_index()
 
         exec_summary['Conversion Rate (%)'] = (exec_summary['Orders_Won'] / exec_summary['Quotations'] * 100).round(1)
@@ -319,7 +342,7 @@ def render_analytics():
 
         st.divider()
         st.markdown("#### 💵 Revenue vs Outstanding Collections by Sales Executive")
-        st.bar_chart(exec_summary.set_index('Sales Exec')[['Total_Collected', 'Outstanding_Balance']])
+        st.bar_chart(exec_summary.set_index(sales_exec_col)[['Total_Collected', 'Outstanding_Balance']])
 
     # ==========================================
     # VIEW 5: SALES FUNNEL & PIPELINE
@@ -327,16 +350,16 @@ def render_analytics():
     elif menu == "📉 Sales Funnel & Pipeline":
         st.markdown(f"### 📉 Monthly Sales Funnel & Deal Pipeline ({selected_month})")
 
-        stage_summary = df.groupby('Status').agg(
-            Deal_Count=('opportunity_id', 'count'),
-            Total_Value=('Quotation', 'sum')
+        stage_summary = df.groupby(status_col).agg(
+            Deal_Count=(column_mapping.get('opportunity_id', 'opportunity_id'), 'count'),
+            Total_Value=(quotation_col, 'sum')
         ).reset_index()
 
         col_f1, col_f2 = st.columns(2)
 
         with col_f1:
             st.markdown("#### Deal Value by Stage")
-            st.bar_chart(stage_summary.set_index('Status')['Total_Value'])
+            st.bar_chart(stage_summary.set_index(status_col)['Total_Value'])
 
         with col_f2:
             st.markdown("#### Stage Count Distribution")
@@ -344,9 +367,9 @@ def render_analytics():
 
         st.divider()
         st.markdown("#### ❌ Lost Deal Reason Analysis")
-        lost_df = df[df['Reason for Loss'].notnull() & (df['Reason for Loss'] != 'N/A') & (df['Reason for Loss'] != '')]
+        lost_df = df[df[reason_col].notnull() & (df[reason_col] != 'N/A') & (df[reason_col] != '')]
         if not lost_df.empty:
-            loss_counts = lost_df['Reason for Loss'].value_counts()
+            loss_counts = lost_df[reason_col].value_counts()
             st.bar_chart(loss_counts)
         else:
             st.info("No lost deal reasons recorded for this selection.")
@@ -361,10 +384,10 @@ def render_analytics():
 
         with m1:
             st.markdown("#### Performance by Market Sector")
-            sector_df = df.groupby('Project Type')['Quotation'].sum().reset_index()
-            st.bar_chart(sector_df.set_index('Project Type'))
+            sector_df = df.groupby(project_type_col)[quotation_col].sum().reset_index()
+            st.bar_chart(sector_df.set_index(project_type_col))
 
         with m2:
             st.markdown("#### Performance by Product Scope")
-            product_df = df.groupby('Scope')['Quotation'].sum().reset_index()
-            st.bar_chart(product_df.set_index('Scope'))
+            product_df = df.groupby(scope_col)[quotation_col].sum().reset_index()
+            st.bar_chart(product_df.set_index(scope_col))

@@ -2,7 +2,6 @@ import streamlit as st
 import datetime
 import pandas as pd
 from database.db import run_query, execute_commit
-# Place near the top of render_daily_activity() inside modules/daily_activity.py
 
 st.header("📝 Daily Activity Log Entry")
 
@@ -27,7 +26,7 @@ def render_daily_activity():
     st.header("📝 Daily Activity Log Entry")
     st.caption("Track daily effort, client touchpoints, challenges, and support requirements.")
 
-    # Fetch Sales Executives dynamically from SQLite
+    # Fetch Sales Executives dynamically
     users_df = run_query("SELECT user_id, full_name FROM users WHERE role = 'Sales Executive' AND is_active = 1")
     user_dict = dict(zip(users_df['full_name'], users_df['user_id'])) if not users_df.empty else {}
 
@@ -70,7 +69,7 @@ def render_daily_activity():
                 (log_date, sales_executive_id, new_companies_visited, telephone_calls, 
                  emails_sent, meetings_held, new_leads_generated, daily_challenges, 
                  management_support_needed, remarks)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             params = (
                 log_date, exec_id, new_companies_visited, telephone_calls,
@@ -87,16 +86,16 @@ def render_daily_activity():
 
     recent_logs = run_query("""
         SELECT 
-            d.log_date AS 'Date',
-            u.full_name AS 'Sales Person',
-            d.new_companies_visited AS 'New Companies Visited',
-            d.telephone_calls AS 'Telephone Calls',
-            d.emails_sent AS 'Emails Sent',
-            d.meetings_held AS 'Meetings Held',
-            d.new_leads_generated AS 'New Leads Generated',
-            d.daily_challenges AS 'Daily Challenges',
-            d.management_support_needed AS 'Management Support Needed',
-            d.remarks AS 'Remarks'
+            d.log_date AS "Date",
+            u.full_name AS "Sales Person",
+            d.new_companies_visited AS "New Companies Visited",
+            d.telephone_calls AS "Telephone Calls",
+            d.emails_sent AS "Emails Sent",
+            d.meetings_held AS "Meetings Held",
+            d.new_leads_generated AS "New Leads Generated",
+            d.daily_challenges AS "Daily Challenges",
+            d.management_support_needed AS "Management Support Needed",
+            d.remarks AS "Remarks"
         FROM daily_activity_logs d
         JOIN users u ON d.sales_executive_id = u.user_id
         ORDER BY d.log_id DESC

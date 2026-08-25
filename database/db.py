@@ -29,7 +29,6 @@ def run_query(query, params=None):
     Permanent helper to execute SELECT queries against PostgreSQL safely.
     Handles parameter conversion automatically to prevent driver crashes.
     """
-    # ROBUST PARAMETER NORMALIZATION (Moved to the top)
     if params is None:
         safe_params = ()
     elif isinstance(params, (list, tuple, dict)):
@@ -60,7 +59,6 @@ def run_query(query, params=None):
 
 def execute_commit(query, params=None):
     """Executes INSERT, UPDATE, or DELETE queries and commits changes safely."""
-    # ROBUST PARAMETER NORMALIZATION (Moved to the top)
     if params is None:
         safe_params = ()
     elif isinstance(params, (list, tuple, dict)):
